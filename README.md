@@ -1,6 +1,6 @@
 # TGPM Armory
 
-TGPM Armory is a standalone internal property management tool hub built with Next.js, TypeScript, and Tailwind CSS. It is designed for deployment on Vercel.
+TGPM Armory is an internal launchpad for TGPM property management tools. It is a standalone tool hub built with Next.js, TypeScript, and Tailwind CSS, and is designed for deployment on Vercel.
 
 ## Features
 
