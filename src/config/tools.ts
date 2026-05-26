@@ -50,11 +50,23 @@ export const tools: ToolLink[] = [
     url: "https://script.google.com/macros/s/AKfycbwJsG32THdeCzatqV_hSg4qw9yLjskKoGqQpQA0ociRw8t4tgd5CG-cd73vDbWVVgRU/exec",
   },
   {
+  name: "Applicant Review Portal",
+  description: "Upload applicant documents for AI screening review.",
+  category: "Leasing",
+  url: "https://applicant-review-portal-4xv7grx8m.vercel.app/",
+},
+  {
     name: "Turn Budget Analyzer",
     description: "Plan unit turns with budget targets and variance review.",
     category: "Budgeting",
     url: "https://script.google.com/a/macros/thetgpm.com/s/AKfycbx2Q0pwDqNMniSz08BsDjlMdMSyynE8hpK1qx1_GHATCxjNpsyl9b8b33SXBkklK6N0Fg/exec",
   },
+  {
+  name: "WO Search",
+  description: "Search and review work orders from AppFolio.",
+  category: "Maintenance",
+  url: "https://script.google.com/macros/s/AKfycbwIsdJ6uWmnedApJXB3P-ejfa5eMw9XMSFChl2OJrd_3bohz2qttckae6NoQybk7D-HTA/exec",
+},
   {
   name: "PM Order Request",
   description: "Submit property management order requests for team review.",
