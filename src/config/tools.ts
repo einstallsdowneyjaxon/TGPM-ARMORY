@@ -58,7 +58,7 @@ export const tools: ToolLink[] = [
   {
     name: "Turn Budget Analyzer",
     description: "Plan unit turns with budget targets and variance review. Compare Cosmetic vs Necessary",
-    category: "Budgeting",
+    category: "Maintenance",
     url: "https://script.google.com/a/macros/thetgpm.com/s/AKfycbx2Q0pwDqNMniSz08BsDjlMdMSyynE8hpK1qx1_GHATCxjNpsyl9b8b33SXBkklK6N0Fg/exec",
   },
   {
