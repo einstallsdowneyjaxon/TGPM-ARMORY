@@ -44,6 +44,12 @@ export const tools: ToolLink[] = [
     url: "https://example.com/estimate-analyzer",
   },
   {
+    name: "PM Order Request",
+    description: "Submit property management order requests for team review.",
+    category: "Maintenance",
+    url: "https://pm-order-request-git-main-einstallsdowneyjaxons-projects.vercel.app",
+  },
+  {
     name: "Resident Summary",
     description: "Open a concise resident view for account and service context.",
     category: "Resident",
