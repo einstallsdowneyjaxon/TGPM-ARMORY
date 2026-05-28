@@ -68,6 +68,12 @@ export const tools: ToolLink[] = [
   url: "https://script.google.com/macros/s/AKfycbwIsdJ6uWmnedApJXB3P-ejfa5eMw9XMSFChl2OJrd_3bohz2qttckae6NoQybk7D-HTA/exec",
 },
   {
+  name: "New Property Onboarding",
+  description: "Complete onboarding setup and intake for new management properties.",
+  category: "Leasing",
+  url: "https://appfolio-property-onboarding.vercel.app/",
+},
+  {
   name: "PM Order Request",
   description: "Submit property management order requests ex: New Appliance from Lowes.",
   category: "Maintenance",
