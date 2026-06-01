@@ -3,6 +3,32 @@
 import { useMemo, useState } from "react";
 import { toolCategories, tools } from "@/config/tools";
 
+const botStatusClassNames = {
+  Online: "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.75)]",
+  Warning: "bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.65)]",
+  Offline: "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.65)]",
+  Unknown: "bg-slate-500 shadow-[0_0_8px_rgba(100,116,139,0.55)]",
+};
+
+function RobotIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5 text-cyan-200"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.7"
+    >
+      <path d="M8 7V5.5a4 4 0 0 1 8 0V7" />
+      <rect width="16" height="12" x="4" y="8" rx="3" />
+      <path d="M2.5 13h1.5M20 13h1.5M9 13h.01M15 13h.01M10 17h4" />
+    </svg>
+  );
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
 
@@ -121,9 +147,32 @@ export default function Home() {
                           <p className="text-xs font-semibold uppercase text-amber-300">
                             {tool.category}
                           </p>
-                          <h3 className="mt-3 text-xl font-semibold text-white">
-                            {tool.name}
-                          </h3>
+                          {tool.bot ? (
+                            <div className="mt-3">
+                              <div className="flex items-center gap-2">
+                                <RobotIcon />
+                                <h3 className="text-xl font-semibold text-white">
+                                  {tool.bot.label}
+                                </h3>
+                              </div>
+                              <div className="mt-2 flex items-center gap-2 text-sm text-white">
+                                <span
+                                  aria-hidden="true"
+                                  className={`h-2.5 w-2.5 rounded-full ${botStatusClassNames[tool.bot.status]}`}
+                                />
+                                <span>{tool.bot.status}</span>
+                              </div>
+                              {tool.bot.lastRun ? (
+                                <p className="mt-1 text-xs text-slate-400">
+                                  Last Run: {tool.bot.lastRun}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <h3 className="mt-3 text-xl font-semibold text-white">
+                              {tool.name}
+                            </h3>
+                          )}
                           <p className="mt-3 text-sm leading-6 text-slate-300">
                             {tool.description}
                           </p>
