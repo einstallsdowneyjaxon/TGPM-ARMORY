@@ -12,16 +12,28 @@ const analysisSchema = {
   additionalProperties: false,
   required: [
     "overallHealthScore",
-    "maintenanceTrendScore",
-    "risingCostAlerts",
+    "financialHealthScore",
+    "maintenanceHealthScore",
+    "reserveHealthScore",
+    "riskScore",
+    "topRedFlags",
+    "risingMaintenanceAlerts",
     "recurringIssueDetection",
     "ownerFacingSummary",
     "internalTgpmActionPlan",
   ],
   properties: {
     overallHealthScore: { type: "number", minimum: 0, maximum: 100 },
-    maintenanceTrendScore: { type: "number", minimum: 0, maximum: 100 },
-    risingCostAlerts: {
+    financialHealthScore: { type: "number", minimum: 0, maximum: 100 },
+    maintenanceHealthScore: { type: "number", minimum: 0, maximum: 100 },
+    reserveHealthScore: { type: "number", minimum: 0, maximum: 100 },
+    riskScore: { type: "number", minimum: 0, maximum: 100 },
+    topRedFlags: {
+      type: "array",
+      items: { type: "string" },
+      maxItems: 8,
+    },
+    risingMaintenanceAlerts: {
       type: "array",
       items: { type: "string" },
       maxItems: 8,
@@ -78,7 +90,7 @@ export async function POST(request: Request) {
           {
             role: "system",
             content:
-              "You are an expert property management maintenance and financial analyst for TG Property Management. Analyze only the clean calculated operating data supplied by the app. Do not invent numbers, vendors, dates, properties, or transactions. Excluded trust, liability, clearing, deposit, and balance sheet activity is context only and must not influence health scores. Focus on catching rising maintenance costs early while keeping owner-facing language polished, clear, and non-alarming.",
+              "You are an expert property management financial and maintenance analyst for TG Property Management. Analyze only the clean calculated summaries supplied by the app. Never invent totals, rows, vendors, dates, units, or transactions. Excluded non-operating activity and true uncategorized summaries are data-quality context only and must not be treated as operating performance. Keep owner-facing language polished, clear, and non-alarming.",
           },
           {
             role: "user",
@@ -131,37 +143,32 @@ export async function POST(request: Request) {
 function buildModelPayload(report: PropertyHealthReport) {
   return {
     instruction:
-      "Return structured JSON. Scores and alerts must use only operating income, operating expenses, maintenance subcategories, monthly trends, year-over-year changes, and maintenance vendor/description summaries. Excluded totals and true uncategorized summaries are for data-quality context only.",
+      "Return structured JSON. Use only the calculated summaries below. Do not infer or invent totals. Scores should evaluate operating performance, maintenance trajectory, reserves/owner-funding posture, and risk. Excluded non-operating and true uncategorized data should only inform data-quality caveats.",
     propertyAddress: report.propertyName,
     dateRange: report.dateRange,
-    rowCounts: {
-      totalRows: report.rowCount,
-      operatingRows: report.operatingRowCount,
-      excludedRows: report.excludedRowCount,
+    operatingIncome: report.totals.operatingIncome,
+    operatingExpenses: report.totals.operatingExpenses,
+    estimatedNoiCashFlow: report.totals.estimatedNoiCashFlow,
+    maintenanceTotals: {
+      total: report.totals.maintenanceTotal,
+      subcategories: report.maintenanceSubcategories,
     },
-    incomeTotals: {
-      operatingIncome: report.totals.operatingIncome,
-      rentIncome: report.totals.rentIncome,
-      otherIncomeRecoveries: report.totals.otherIncomeRecoveries,
-    },
-    expenseTotals: {
-      operatingExpenses: report.totals.operatingExpenses,
-      maintenanceTotal: report.totals.maintenanceTotal,
-      managementFees: report.totals.managementFees,
-      leasingFees: report.totals.leasingFees,
-      utilities: report.totals.utilities,
-      legal: report.totals.legal,
-      estimatedNoiCashFlow: report.totals.estimatedNoiCashFlow,
-    },
-    maintenanceSubcategories: report.maintenanceSubcategories,
-    maintenanceWatchlist: report.maintenanceWatchlist,
+    maintenanceWatchlist: report.maintenanceWatchlist.map((item) => ({
+      category: item.label,
+      amount: item.amount,
+      transactionCount: item.transactionCount,
+      averageTransactionAmount: item.averageTransactionAmount,
+      latestTransactionDate: item.latestTransactionDate,
+      trendDirection: item.trendDirection,
+      trendBasis: item.trendBasis,
+      riskLevel: item.riskLevel,
+    })),
     monthlyTrends: report.monthlyTrends,
     yearOverYear: report.yearOverYear,
-    topMaintenanceVendors: report.topMaintenanceVendors,
-    topMaintenanceDescriptions: report.topMaintenanceDescriptions,
-    excludedTotalsSummary: {
-      excludedNonOperating: report.totals.excludedNonOperating,
-      topExcludedAccounts: report.topExcludedAccounts,
+    excludedNonOperatingSummary: {
+      amount: report.totals.excludedNonOperating,
+      rowCount: report.excludedRowCount,
+      topAccounts: report.topExcludedAccounts,
     },
     trueUncategorizedSummary: {
       amount: report.totals.trueUncategorized,

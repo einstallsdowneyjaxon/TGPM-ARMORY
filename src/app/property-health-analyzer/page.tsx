@@ -13,8 +13,12 @@ import {
 
 type AiAnalysis = {
   overallHealthScore: number;
-  maintenanceTrendScore: number;
-  risingCostAlerts: string[];
+  financialHealthScore: number;
+  maintenanceHealthScore: number;
+  reserveHealthScore: number;
+  riskScore: number;
+  topRedFlags: string[];
+  risingMaintenanceAlerts: string[];
   recurringIssueDetection: string[];
   ownerFacingSummary: string;
   internalTgpmActionPlan: string[];
@@ -46,9 +50,7 @@ const operatingCategories: LedgerCategory[] = [
 ];
 
 const excludedCategories: LedgerCategory[] = [
-  "security_deposits_liabilities",
-  "internal_transfers_clearing",
-  "balance_sheet_non_operating",
+  "excluded_non_operating",
 ];
 
 export default function PropertyHealthAnalyzerPage() {
@@ -61,6 +63,9 @@ export default function PropertyHealthAnalyzerPage() {
   >("idle");
   const [error, setError] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
+  const [openMaintenanceCategory, setOpenMaintenanceCategory] = useState<
+    MaintenanceSubcategory | null
+  >(null);
 
   const maxMonthlyValue = useMemo(() => {
     if (!report?.monthlyTrends.length) return 1;
@@ -379,9 +384,15 @@ export default function PropertyHealthAnalyzerPage() {
               <Panel title="Maintenance Watchlist">
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {report.maintenanceWatchlist.map((item) => (
-                    <div
+                    <button
+                      type="button"
                       key={item.subcategory}
-                      className="rounded-lg border border-[#eadfd5] bg-[#fbfaf8] p-3"
+                      onClick={() =>
+                        setOpenMaintenanceCategory((current) =>
+                          current === item.subcategory ? null : item.subcategory,
+                        )
+                      }
+                      className="rounded-lg border border-[#eadfd5] bg-[#fbfaf8] p-3 text-left transition hover:border-[#f05a28]/50"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -397,12 +408,43 @@ export default function PropertyHealthAnalyzerPage() {
                       <p className="mt-3 text-xl font-semibold text-[#101828]">
                         {moneyFormatter.format(item.amount)}
                       </p>
-                      <p className="mt-1 text-sm text-[#667085]">
-                        Trend: {item.trendDirection}
-                      </p>
-                    </div>
+                      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-[#667085]">
+                        <dt>Average</dt>
+                        <dd className="text-right">
+                          {moneyFormatter.format(item.averageTransactionAmount)}
+                        </dd>
+                        <dt>Latest</dt>
+                        <dd className="text-right">
+                          {item.latestTransactionDate ?? "N/A"}
+                        </dd>
+                        <dt>Trend</dt>
+                        <dd className="text-right">
+                          {item.trendDirection} ({item.trendBasis})
+                        </dd>
+                      </dl>
+                    </button>
                   ))}
                 </div>
+                {openMaintenanceCategory ? (
+                  <div className="mt-4 border-t border-[#eadfd5] pt-4">
+                    <h3 className="mb-3 text-sm font-semibold text-[#101828]">
+                      {
+                        maintenanceSubcategoryLabels[
+                          openMaintenanceCategory
+                        ]
+                      }{" "}
+                      Transactions
+                    </h3>
+                    <MaintenanceTransactionTable
+                      transactions={
+                        report.maintenanceWatchlist.find(
+                          (item) =>
+                            item.subcategory === openMaintenanceCategory,
+                        )?.transactions ?? []
+                      }
+                    />
+                  </div>
+                ) : null}
               </Panel>
             </section>
 
@@ -441,8 +483,16 @@ export default function PropertyHealthAnalyzerPage() {
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <Score label="Overall" value={analysis.overallHealthScore} />
                     <Score
+                      label="Financial"
+                      value={analysis.financialHealthScore}
+                    />
+                    <Score
                       label="Maintenance"
-                      value={analysis.maintenanceTrendScore}
+                      value={analysis.maintenanceHealthScore}
+                    />
+                    <Score
+                      label="Reserve"
+                      value={analysis.reserveHealthScore}
                     />
                   </div>
                 ) : null}
@@ -512,11 +562,15 @@ export default function PropertyHealthAnalyzerPage() {
                 </Panel>
 
                 <Panel title="Rising Cost Alerts">
-                  <List items={analysis.risingCostAlerts} />
+                  <List items={analysis.risingMaintenanceAlerts} />
                 </Panel>
 
                 <Panel title="Recurring Issue Detection">
                   <List items={analysis.recurringIssueDetection} />
+                </Panel>
+
+                <Panel title="Top Red Flags">
+                  <List items={analysis.topRedFlags} />
                 </Panel>
               </section>
             ) : null}
@@ -676,6 +730,68 @@ function SummaryTable({
   );
 }
 
+function MaintenanceTransactionTable({
+  transactions,
+}: {
+  transactions: Array<{
+    id: string;
+    date: string;
+    account: string;
+    vendorPayee: string;
+    description: string;
+    amount: number;
+    propertyAddress: string;
+    unit: string;
+  }>;
+}) {
+  if (!transactions.length) {
+    return (
+      <p className="text-sm text-[#667085]">
+        No transactions found for this maintenance category.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[760px] text-left text-sm">
+        <thead className="text-xs uppercase text-[#667085]">
+          <tr>
+            <th className="pb-2 font-semibold">Date</th>
+            <th className="pb-2 font-semibold">GL Account</th>
+            <th className="pb-2 font-semibold">Vendor / Payee</th>
+            <th className="pb-2 font-semibold">Description</th>
+            <th className="pb-2 font-semibold">Unit / Property</th>
+            <th className="pb-2 text-right font-semibold">Amount</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#eadfd5]">
+          {transactions.map((transaction) => (
+            <tr key={transaction.id}>
+              <td className="py-2 pr-3 text-[#475467]">{transaction.date}</td>
+              <td className="py-2 pr-3 text-[#475467]">
+                {transaction.account}
+              </td>
+              <td className="py-2 pr-3 text-[#475467]">
+                {transaction.vendorPayee || "N/A"}
+              </td>
+              <td className="py-2 pr-3 text-[#475467]">
+                {transaction.description || "N/A"}
+              </td>
+              <td className="py-2 pr-3 text-[#475467]">
+                {transaction.unit || transaction.propertyAddress || "N/A"}
+              </td>
+              <td className="py-2 text-right font-semibold text-[#101828]">
+                {moneyFormatter.format(transaction.amount)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function YoYLine({ label, value }: { label: string; value: number | null }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -704,11 +820,11 @@ function AiStatus({
   return <p className="text-sm leading-6 text-[#667085]">{messages[state]}</p>;
 }
 
-function RiskBadge({ risk }: { risk: "Low" | "Moderate" | "High" }) {
+function RiskBadge({ risk }: { risk: "Low" | "Watch" | "Escalating" }) {
   const classes =
-    risk === "High"
+    risk === "Escalating"
       ? "bg-red-50 text-red-700"
-      : risk === "Moderate"
+      : risk === "Watch"
         ? "bg-amber-50 text-amber-700"
         : "bg-emerald-50 text-emerald-700";
 
