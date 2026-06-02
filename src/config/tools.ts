@@ -71,20 +71,13 @@ export const tools: ToolLink[] = [
   {
     name: "Property Onboarding Bot",
     description:
-      "Track property onboarding automation health and handoff readiness.",
+      "Complete onboarding setup, intake, and automation handoff readiness for new management properties.",
     category: "Leasing",
-    url: "https://example.com/property-onboarding-bot",
+    url: "https://appfolio-property-onboarding.vercel.app/",
     bot: {
       label: propertyOnboardingBot?.name || "Property Onboarding Bot",
       status: propertyOnboardingBot?.status || "Unknown",
     },
-  },
-  {
-    name: "New Property Onboarding",
-    description:
-      "Complete onboarding setup and intake for new management properties.",
-    category: "Leasing",
-    url: "https://appfolio-property-onboarding.vercel.app/",
   },
   {
     name: "Applicant Review Portal",
