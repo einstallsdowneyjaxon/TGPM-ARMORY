@@ -18,6 +18,11 @@ type GoogleCredentials = {
   private_key: string;
 };
 
+type OAuthClientConfig = {
+  client_id: string;
+  client_secret: string;
+};
+
 let sheetsClient: sheets_v4.Sheets | null = null;
 
 function getSpreadsheetId() {
@@ -44,9 +49,19 @@ function parseServiceAccountCredentials(): GoogleCredentials | null {
   return credentials;
 }
 
-function parseOAuthClientConfig(value: unknown) {
+function parseJsonObject(value: string, label: string) {
+  const parsed: unknown = JSON.parse(value);
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error(`${label} must be a JSON object.`);
+  }
+  return parsed;
+}
+
+function parseOAuthClientConfig(value: unknown): OAuthClientConfig {
   if (!value || typeof value !== "object") {
-    throw new Error("Google OAuth client file must contain an installed or web client object.");
+    throw new Error(
+      "Google OAuth client JSON must contain an installed or web client object.",
+    );
   }
 
   const config = value as {
@@ -55,34 +70,73 @@ function parseOAuthClientConfig(value: unknown) {
   };
   const client = config.installed || config.web;
   if (!client?.client_id || !client.client_secret) {
-    throw new Error("Google OAuth client file must include client_id and client_secret.");
+    throw new Error(
+      "Google OAuth client JSON must include client_id and client_secret.",
+    );
   }
-  return client;
+  return {
+    client_id: client.client_id,
+    client_secret: client.client_secret,
+  };
 }
 
-async function getLocalOAuthAuth() {
-  if (process.env.NODE_ENV === "production" && process.env.ALLOW_LOCAL_GOOGLE_OAUTH !== "true") {
-    return null;
-  }
-
+async function getOAuthClientConfig() {
   const fs = await import("node:fs");
-  const tokenPath = process.env.GOOGLE_OAUTH_TOKEN_PATH || "../.appfolio-google-token.json";
-  const clientPath =
-    process.env.GOOGLE_OAUTH_CLIENT_JSON ||
+  const clientJsonOrPath = process.env.GOOGLE_OAUTH_CLIENT_JSON;
+  const defaultClientPath =
     "C:/Users/Inqui/Downloads/client_secret_172984887894-fao8ei9m253ll9eoi4i3k45q4i54m9s4.apps.googleusercontent.com.json";
 
-  if (!fs.existsSync(tokenPath)) return null;
+  if (clientJsonOrPath?.trim().startsWith("{")) {
+    return parseOAuthClientConfig(
+      parseJsonObject(clientJsonOrPath, "GOOGLE_OAUTH_CLIENT_JSON"),
+    );
+  }
+
+  if (process.env.NODE_ENV === "production") return null;
+
+  const clientPath = clientJsonOrPath || defaultClientPath;
   if (!fs.existsSync(clientPath)) {
     throw new Error(`Google OAuth client file was not found at ${clientPath}.`);
   }
 
-  const client = parseOAuthClientConfig(JSON.parse(fs.readFileSync(clientPath, "utf8")));
+  return parseOAuthClientConfig(JSON.parse(fs.readFileSync(clientPath, "utf8")));
+}
+
+async function getOAuthToken() {
+  const tokenJson = process.env.GOOGLE_OAUTH_TOKEN_JSON;
+  if (tokenJson?.trim().startsWith("{")) {
+    return parseJsonObject(tokenJson, "GOOGLE_OAUTH_TOKEN_JSON");
+  }
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_LOCAL_GOOGLE_OAUTH !== "true"
+  ) {
+    return null;
+  }
+
+  const fs = await import("node:fs");
+  const tokenPath =
+    process.env.GOOGLE_OAUTH_TOKEN_PATH || "../.appfolio-google-token.json";
+  if (!fs.existsSync(tokenPath)) return null;
+
+  return JSON.parse(fs.readFileSync(tokenPath, "utf8")) as Record<
+    string,
+    unknown
+  >;
+}
+
+async function getOAuthAuth() {
+  const client = await getOAuthClientConfig();
+  const token = await getOAuthToken();
+  if (!client || !token) return null;
+
   const oauth2Client = new google.auth.OAuth2(
     client.client_id,
     client.client_secret,
     "http://127.0.0.1:53682/oauth2callback",
   );
-  oauth2Client.setCredentials(JSON.parse(fs.readFileSync(tokenPath, "utf8")));
+  oauth2Client.setCredentials(token);
   return oauth2Client;
 }
 
@@ -96,11 +150,11 @@ async function getSheetsClient() {
         key: credentials.private_key.replace(/\\n/g, "\n"),
         scopes: ["https://www.googleapis.com/auth/spreadsheets"],
       })
-    : await getLocalOAuthAuth();
+    : await getOAuthAuth();
 
   if (!auth) {
     throw new Error(
-      "Configure GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_CREDENTIALS_JSON, GOOGLE_SERVICE_ACCOUNT_JSON_BASE64, or a local GOOGLE_OAUTH_TOKEN_PATH for MLS Sheets access.",
+      "Configure GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_CREDENTIALS_JSON, GOOGLE_SERVICE_ACCOUNT_JSON_BASE64, GOOGLE_OAUTH_CLIENT_JSON with GOOGLE_OAUTH_TOKEN_JSON, or a local GOOGLE_OAUTH_TOKEN_PATH for MLS Sheets access.",
     );
   }
 
