@@ -4,7 +4,6 @@ import {
   MLS_SPREADSHEET_ID,
   MLS_TODO_SHEET,
   mlsPmFields,
-  mlsReadyHeaders,
   rentCastFieldMap,
 } from "@/config/mls-fields";
 
@@ -197,6 +196,16 @@ export async function readSheetRows(sheetName: string, range = "A1:CC2000") {
   return valuesToRows((response.data.values as string[][] | undefined) || []);
 }
 
+async function readSheetHeaders(sheetName: string) {
+  const sheets = await getSheetsClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSpreadsheetId(),
+    range: `${sheetName}!1:1`,
+    valueRenderOption: "FORMATTED_VALUE",
+  });
+  return ((response.data.values?.[0] as string[] | undefined) || []).filter(Boolean);
+}
+
 export async function getMlsReadyRows(query = "") {
   const rows = await readSheetRows(MLS_READY_SHEET);
   const normalized = normalizeSearch(query);
@@ -253,8 +262,9 @@ function columnLetter(index: number) {
 
 async function updateReadyColumns(rowNumber: number, updates: Record<string, string>) {
   const sheets = await getSheetsClient();
+  const headers = await readSheetHeaders(MLS_READY_SHEET);
   const data = Object.entries(updates).map(([column, value]) => {
-    const index = mlsReadyHeaders.indexOf(column as (typeof mlsReadyHeaders)[number]);
+    const index = headers.indexOf(column);
     if (index < 0) throw new Error(`Unknown MLS_READY column: ${column}`);
     return {
       range: `${MLS_READY_SHEET}!${columnLetter(index)}${rowNumber}`,
@@ -275,11 +285,13 @@ async function updateReadyColumns(rowNumber: number, updates: Record<string, str
 
 async function writeReadyRow(rowNumber: number, values: Record<string, string>) {
   const sheets = await getSheetsClient();
-  const row = mlsReadyHeaders.map((header) => values[header] || "");
+  const headers = await readSheetHeaders(MLS_READY_SHEET);
+  const row = headers.map((header) => values[header] || "");
+  const lastColumn = columnLetter(Math.max(headers.length - 1, 0));
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: getSpreadsheetId(),
-    range: `${MLS_READY_SHEET}!A${rowNumber}:CC${rowNumber}`,
+    range: `${MLS_READY_SHEET}!A${rowNumber}:${lastColumn}${rowNumber}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [row] },
   });
@@ -326,9 +338,17 @@ export async function submitPmFields(rowNumber: number, fields: Record<string, s
   updates["Ready Row Updated At"] = new Date().toISOString();
   updates["Ready Source"] = row.values["Ready Source"] || "PM App";
   updates["PM Submitted At"] = new Date().toISOString();
+  Object.assign(row.values, updates);
 
   await updateReadyColumns(rowNumber, updates);
-  return { rowNumber, missing: missing.map((field) => field.sheetColumn), updates };
+  return {
+    rowNumber,
+    missing: missing.map((field) => field.sheetColumn),
+    updates,
+    ready: row.values.MLS_READY === "Yes" && row.values["PM Fields Status"] === "Complete",
+    taskKey: row.values["Task Key"] || "",
+    address: row.values.Address || row.values["RentCast formattedAddress"] || "",
+  };
 }
 
 function placeholderRentCast(todo: Record<string, string>) {

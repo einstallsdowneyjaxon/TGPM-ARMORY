@@ -143,7 +143,11 @@ export default function MlsReadyPage() {
       setStatus(payload.error || "Could not save PM fields.");
       return;
     }
-    setStatus(payload.missing?.length ? `Saved. Still missing: ${payload.missing.join(", ")}` : "Saved. MLS_READY is Yes.");
+    if (payload.botTrigger && !payload.botTrigger.ok) {
+      setStatus(payload.botTrigger.warning || "Saved, but bot did not start.");
+    } else {
+      setStatus(payload.missing?.length ? `Saved. Still missing: ${payload.missing.join(", ")}` : "Saved. MLS_READY is Yes.");
+    }
     await loadRows(query);
   }
 

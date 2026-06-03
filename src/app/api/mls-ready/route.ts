@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mlsPmFields } from "@/config/mls-fields";
+import { triggerMlsBotRun } from "@/lib/mls-bot-trigger";
 import { getMlsReadyRows, getTodoRows, missingPmFields, submitPmFields } from "@/lib/mls-sheets";
 
 export async function GET(request: NextRequest) {
@@ -31,6 +32,16 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await submitPmFields(body.rowNumber, body.fields);
+    if (result.ready) {
+      const botTrigger = await triggerMlsBotRun({
+        rowNumber: result.rowNumber,
+        taskKey: result.taskKey,
+        address: result.address,
+        source: "tgpm-armory",
+      });
+      return NextResponse.json({ ...result, botTrigger });
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
