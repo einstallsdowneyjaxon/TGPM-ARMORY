@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { MissionControlBotTelemetry } from "@/config/mission-control";
 import { toolCategories, tools } from "@/config/tools";
 
 const botStatusClassNames = {
@@ -29,8 +30,52 @@ function RobotIcon() {
   );
 }
 
+function getBotShortName(label: string) {
+  return label.replace(/\s+Bot$/, "");
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
+  const [botTelemetry, setBotTelemetry] = useState<
+    Record<string, MissionControlBotTelemetry>
+  >({});
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBotTelemetry() {
+      try {
+        const response = await fetch("/api/mission-control/bots", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          bots?: MissionControlBotTelemetry[];
+        };
+        const nextTelemetry = Object.fromEntries(
+          (payload.bots || []).map((bot) => [bot.id, bot]),
+        );
+
+        if (isMounted) {
+          setBotTelemetry(nextTelemetry);
+        }
+      } catch {
+        // Keep the dashboard usable with static bot config if live polling fails.
+      }
+    }
+
+    loadBotTelemetry();
+    const interval = window.setInterval(loadBotTelemetry, 30_000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const filteredTools = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -138,56 +183,128 @@ export default function Home() {
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {categoryTools.map((tool) => (
-                      <article
-                        key={tool.name}
-                        className="flex min-h-48 flex-col justify-between rounded-lg border border-white/10 bg-[#101d31] p-5 shadow-lg shadow-black/15"
-                      >
-                        <div>
-                          <p className="text-xs font-semibold uppercase text-amber-300">
-                            {tool.category}
-                          </p>
-                          {tool.bot ? (
-                            <div className="mt-3">
-                              <div className="flex items-center gap-2">
-                                <RobotIcon />
-                                <h3 className="text-xl font-semibold text-white">
-                                  {tool.bot.label}
-                                </h3>
-                              </div>
-                              <div className="mt-2 flex items-center gap-2 text-sm text-white">
-                                <span
-                                  aria-hidden="true"
-                                  className={`h-2.5 w-2.5 rounded-full ${botStatusClassNames[tool.bot.status]}`}
-                                />
-                                <span>{tool.bot.status}</span>
-                              </div>
-                              {tool.bot.lastRun ? (
-                                <p className="mt-1 text-xs text-slate-400">
-                                  Last Run: {tool.bot.lastRun}
-                                </p>
-                              ) : null}
-                            </div>
-                          ) : (
-                            <h3 className="mt-3 text-xl font-semibold text-white">
-                              {tool.name}
-                            </h3>
-                          )}
-                          <p className="mt-3 text-sm leading-6 text-slate-300">
-                            {tool.description}
-                          </p>
-                        </div>
+                    {categoryTools.map((tool) => {
+                      const liveBot = tool.bot
+                        ? botTelemetry[tool.bot.id]
+                        : undefined;
+                      const botStatus =
+                        liveBot?.status || tool.bot?.status || "Unknown";
+                      const lastRun = liveBot?.lastRun || tool.bot?.lastRun;
+                      const lastError = liveBot?.lastError;
+                      const pendingCaptchaStatus =
+                        liveBot?.pendingCaptchaStatus;
+                      const summaryBots = tool.missionControlSummary?.botIds.map(
+                        (botId) => {
+                          const configuredBot = tools.find(
+                            (candidate) => candidate.bot?.id === botId,
+                          )?.bot;
+                          const telemetry = botTelemetry[botId];
+                          const status =
+                            telemetry?.status ||
+                            configuredBot?.status ||
+                            "Unknown";
 
-                        <a
-                          href={tool.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-6 inline-flex h-11 items-center justify-center rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-[#07111f] transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-100 focus:ring-offset-2 focus:ring-offset-[#101d31]"
+                          return {
+                            id: botId,
+                            label: getBotShortName(
+                              configuredBot?.label || telemetry?.name || botId,
+                            ),
+                            status,
+                          };
+                        },
+                      );
+                      const summaryOnlineCount =
+                        summaryBots?.filter((bot) => bot.status === "Online")
+                          .length || 0;
+
+                      return (
+                        <article
+                          key={tool.name}
+                          className="flex min-h-48 flex-col justify-between rounded-lg border border-white/10 bg-[#101d31] p-5 shadow-lg shadow-black/15"
                         >
-                          Open Tool
-                        </a>
-                      </article>
-                    ))}
+                          <div>
+                            <p className="text-xs font-semibold uppercase text-amber-300">
+                              {tool.category}
+                            </p>
+                            {tool.missionControlSummary && summaryBots ? (
+                              <div className="mt-3">
+                                <div className="flex items-center gap-2">
+                                  <RobotIcon />
+                                  <h3 className="text-xl font-semibold text-white">
+                                    Coco XR Mission Control
+                                  </h3>
+                                </div>
+                                <p className="mt-2 text-2xl font-semibold text-white">
+                                  {summaryOnlineCount}/{summaryBots.length} Online
+                                </p>
+                                <div className="mt-4 space-y-2">
+                                  {summaryBots.map((bot) => (
+                                    <div
+                                      key={bot.id}
+                                      className="flex items-center gap-2 text-sm text-white"
+                                    >
+                                      <span
+                                        aria-hidden="true"
+                                        className={`h-2.5 w-2.5 rounded-full ${botStatusClassNames[bot.status]}`}
+                                      />
+                                      <RobotIcon />
+                                      <span>{bot.label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : tool.bot ? (
+                              <div className="mt-3">
+                                <div className="flex items-center gap-2">
+                                  <RobotIcon />
+                                  <h3 className="text-xl font-semibold text-white">
+                                    {tool.bot.label}
+                                  </h3>
+                                </div>
+                                <div className="mt-2 flex items-center gap-2 text-sm text-white">
+                                  <span
+                                    aria-hidden="true"
+                                    className={`h-2.5 w-2.5 rounded-full ${botStatusClassNames[botStatus]}`}
+                                  />
+                                  <span>{botStatus}</span>
+                                </div>
+                                {lastRun ? (
+                                  <p className="mt-1 text-xs text-slate-400">
+                                    Last Run: {lastRun}
+                                  </p>
+                                ) : null}
+                                {pendingCaptchaStatus ? (
+                                  <p className="mt-1 text-xs text-slate-400">
+                                    CAPTCHA: {pendingCaptchaStatus}
+                                  </p>
+                                ) : null}
+                                {lastError ? (
+                                  <p className="mt-1 line-clamp-2 text-xs text-rose-200">
+                                    Last Error: {lastError}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <h3 className="mt-3 text-xl font-semibold text-white">
+                                {tool.name}
+                              </h3>
+                            )}
+                            <p className="mt-3 text-sm leading-6 text-slate-300">
+                              {tool.description}
+                            </p>
+                          </div>
+
+                          <a
+                            href={tool.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-6 inline-flex h-11 items-center justify-center rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-[#07111f] transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-100 focus:ring-offset-2 focus:ring-offset-[#101d31]"
+                          >
+                            Open Tool
+                          </a>
+                        </article>
+                      );
+                    })}
                   </div>
                 </div>
               );

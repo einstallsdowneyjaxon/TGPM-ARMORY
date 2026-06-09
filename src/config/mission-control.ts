@@ -12,14 +12,21 @@ export type MissionControlBot = {
   screenshotsPath?: string;
 };
 
+export type MissionControlBotTelemetry = {
+  id: string;
+  name: string;
+  status: BotHealthStatus;
+  lastRun?: string;
+  lastError?: string;
+  pendingCaptchaCount?: number;
+  pendingCaptchaStatus?: string;
+  healthCheckedAt?: string;
+  statusCheckedAt?: string;
+  alertWebhookConfigured?: boolean;
+  alertLastSentAt?: string;
+};
+
 export const missionControlBots: MissionControlBot[] = [
-  {
-  id: "mission-control",
-  name: "Mission Control",
-  category: "Operations",
-  status: "Online",
- 
-}
   {
     id: "renewal-bot",
     name: "Renewal Bot",
@@ -37,9 +44,18 @@ export const missionControlBots: MissionControlBot[] = [
     name: "MLS Bot",
     category: "Operations",
     status: "Online",
-    healthUrl: process.env.NEXT_PUBLIC_MLS_BOT_HEALTH_URL || "http://localhost:8793/health",
-    statusUrl: process.env.NEXT_PUBLIC_MLS_BOT_STATUS_URL || "http://localhost:8793/status",
-    runUrl: process.env.NEXT_PUBLIC_MLS_BOT_RUN_URL || "http://localhost:8793/run",
+    healthUrl:
+      process.env.MLS_BOT_HEALTH_URL ||
+      process.env.NEXT_PUBLIC_MLS_BOT_HEALTH_URL ||
+      "http://206.81.13.133:8793/health",
+    statusUrl:
+      process.env.MLS_BOT_STATUS_URL ||
+      process.env.NEXT_PUBLIC_MLS_BOT_STATUS_URL ||
+      "http://206.81.13.133:8793/status",
+    runUrl:
+      process.env.MLS_BOT_RUN_URL ||
+      process.env.NEXT_PUBLIC_MLS_BOT_RUN_URL ||
+      "http://206.81.13.133:8793/run",
     logsPath: "logs/mls-bot",
     screenshotsPath: "logs/mls-bot/screenshots",
   },

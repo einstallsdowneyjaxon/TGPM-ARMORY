@@ -4,11 +4,11 @@ import {
 } from "@/config/mission-control";
 
 export type ToolCategory =
+  | "Operations"
   | "Leasing"
   | "Maintenance"
   | "Resident"
-  | "Budgeting"
-  | "Operations";
+  | "Budgeting";
 
 export type ToolLink = {
   name: string;
@@ -16,26 +16,74 @@ export type ToolLink = {
   category: ToolCategory;
   url: string;
   bot?: {
+    id: string;
     label: string;
     status: BotHealthStatus;
     lastRun?: string;
   };
+  missionControlSummary?: {
+    botIds: string[];
+  };
 };
 
 export const toolCategories: ToolCategory[] = [
+  "Operations",
   "Leasing",
   "Maintenance",
   "Resident",
   "Budgeting",
-  "Operations",
 ];
 
 const renewalBot = getMissionControlBot("renewal-bot");
 const mlsBot = getMissionControlBot("mls-bot");
 const propertyOnboardingBot = getMissionControlBot("property-onboarding-bot");
-const missionControlBot = getMissionControlBot("mission-control");
 
 export const tools: ToolLink[] = [
+  {
+    name: "Coco XR Mission Control",
+    description: "Monitor and open the live Coco XR bot operations dashboard.",
+    category: "Operations",
+    url: "http://206.81.13.133:8790/",
+    missionControlSummary: {
+      botIds: ["renewal-bot", "property-onboarding-bot", "mls-bot"],
+    },
+  },
+  {
+    name: "Renewal Bot",
+    description:
+      "Review upcoming renewals, risk signals, and automation status.",
+    category: "Operations",
+    url: "https://script.google.com/macros/s/AKfycbxF1dletvJqqGAgnVSSpkqIsu22QSx9izB96qbAUlzrqHFWT0e2oHgbQOaWt9lbSmnrIQ/exec",
+    bot: {
+      id: "renewal-bot",
+      label: renewalBot?.name || "Renewal Bot",
+      status: renewalBot?.status || "Unknown",
+    },
+  },
+  {
+    name: "Property Onboarding Bot",
+    description:
+      "Complete onboarding setup, intake, and automation handoff readiness for new management properties.",
+    category: "Operations",
+    url: "https://appfolio-property-onboarding.vercel.app/",
+    bot: {
+      id: "property-onboarding-bot",
+      label: propertyOnboardingBot?.name || "Property Onboarding Bot",
+      status: propertyOnboardingBot?.status || "Unknown",
+    },
+  },
+  {
+    name: "MLS Bot",
+    description:
+      "Complete missing PM fields for MLS_READY rows before the MLS automation runs.",
+    category: "Operations",
+    url: "/mls-ready",
+    bot: {
+      id: "mls-bot",
+      label: mlsBot?.name || "MLS Bot",
+      status: mlsBot?.status || "Unknown",
+    },
+  },
   {
     name: "Get Rent Comps",
     description: "Compare nearby rent signals and market positioning.",
@@ -50,44 +98,11 @@ export const tools: ToolLink[] = [
     url: "https://script.google.com/a/macros/thetgpm.com/s/AKfycbxVdM1jgRAVr0aairLzkD5LaE3mKtRuidGDJg_sYaBVH9zr9oXt9TwI2IgQqDUHH--3Aw/exec",
   },
   {
-    name: "Renewal Bot",
-    description:
-      "Review upcoming renewals, risk signals, and automation status.",
-    category: "Operations",
-    url: "https://script.google.com/macros/s/AKfycbxF1dletvJqqGAgnVSSpkqIsu22QSx9izB96qbAUlzrqHFWT0e2oHgbQOaWt9lbSmnrIQ/exec",
-    bot: {
-      label: renewalBot?.name || "Renewal Bot",
-      status: renewalBot?.status || "Unknown",
-    },
-  },
-  {
-    name: "MLS Bot",
-    description:
-      "Complete missing PM fields for MLS_READY rows before the MLS automation runs.",
-    category: "Operations",
-    url: "/mls-ready",
-    bot: {
-      label: mlsBot?.name || "MLS Bot",
-      status: mlsBot?.status || "Unknown",
-    },
-  },
-  {
-    name: "Property Onboarding Bot",
-    description:
-      "Complete onboarding setup, intake, and automation handoff readiness for new management properties.",
-    category: "Operations",
-    url: "https://appfolio-property-onboarding.vercel.app/",
-    bot: {
-      label: propertyOnboardingBot?.name || "Property Onboarding Bot",
-      status: propertyOnboardingBot?.status || "Unknown",
-    },
-  },
-  {
     name: "Applicant Review Portal",
     description:
       "Upload applicant documents for AI screening review. Include Application | Screening Docs | Paystubs",
     category: "Leasing",
-    url: "https://applicant-review-portal-4xv7grx8m.vercel.app/",
+    url: "https://applicant-review-portal.vercel.app/",
   },
   {
     name: "Estimate Analyzer",
@@ -100,7 +115,7 @@ export const tools: ToolLink[] = [
     description:
       "Submit property management order requests ex: New Appliance from Lowes.",
     category: "Maintenance",
-    url: "https://pm-order-request-git-main-einstallsdowneyjaxons-projects.vercel.app",
+    url: "https://pm-order-request.vercel.app",
   },
   {
     name: "WO Search",
@@ -129,15 +144,4 @@ export const tools: ToolLink[] = [
     category: "Budgeting",
     url: "/property-health-analyzer",
   },
-  {
-  name: "Coco XR Mission Control",
-  description: "View bot health, last runs, failures, and CAPTCHA status.",
-  category: "Operations",
-  url: "http://206.81.13.133:8790/",
-  bot: {
-    label: missionControlBot?.name || "Mission Control",
-    status: missionControlBot?.status || "Unknown",
-    lastRun: missionControlBot?.lastRun,
-  },
-}
 ];
