@@ -7,7 +7,8 @@ export type ToolCategory =
   | "Leasing"
   | "Maintenance"
   | "Resident"
-  | "Budgeting";
+  | "Budgeting"
+  | "Operations";
 
 export type ToolLink = {
   name: string;
@@ -26,6 +27,7 @@ export const toolCategories: ToolCategory[] = [
   "Maintenance",
   "Resident",
   "Budgeting",
+  "Operations",
 ];
 
 const renewalBot = getMissionControlBot("renewal-bot");
@@ -50,7 +52,7 @@ export const tools: ToolLink[] = [
     name: "Renewal Bot",
     description:
       "Review upcoming renewals, risk signals, and automation status.",
-    category: "Leasing",
+    category: "Operations",
     url: "https://script.google.com/macros/s/AKfycbxF1dletvJqqGAgnVSSpkqIsu22QSx9izB96qbAUlzrqHFWT0e2oHgbQOaWt9lbSmnrIQ/exec",
     bot: {
       label: renewalBot?.name || "Renewal Bot",
@@ -61,7 +63,7 @@ export const tools: ToolLink[] = [
     name: "MLS Bot",
     description:
       "Complete missing PM fields for MLS_READY rows before the MLS automation runs.",
-    category: "Leasing",
+    category: "Operations",
     url: "/mls-ready",
     bot: {
       label: mlsBot?.name || "MLS Bot",
@@ -72,7 +74,7 @@ export const tools: ToolLink[] = [
     name: "Property Onboarding Bot",
     description:
       "Complete onboarding setup, intake, and automation handoff readiness for new management properties.",
-    category: "Leasing",
+    category: "Operations",
     url: "https://appfolio-property-onboarding.vercel.app/",
     bot: {
       label: propertyOnboardingBot?.name || "Property Onboarding Bot",
