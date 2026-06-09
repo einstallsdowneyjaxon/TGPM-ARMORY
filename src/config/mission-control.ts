@@ -18,7 +18,7 @@ export const missionControlBots: MissionControlBot[] = [
   name: "Mission Control",
   category: "Operations",
   status: "Online",
-  healthUrl: process.env.NEXT_PUBLIC_MISSION_CONTROL_URL || "http://206.81.13.133:8790/",
+ 
 }
   {
     id: "renewal-bot",
