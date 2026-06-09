@@ -129,9 +129,9 @@ export const tools: ToolLink[] = [
     url: "/property-health-analyzer",
   },
   {
-  title: "Mission Control",
+  name: "Mission Control",
   description: "View bot health, last runs, failures, and CAPTCHA status.",
-  href: "http://206.81.13.133:8790/",
+  url: "http://206.81.13.133:8790/",
   category: "Operations",
   icon: "Bot",
 }
