@@ -33,6 +33,7 @@ export const toolCategories: ToolCategory[] = [
 const renewalBot = getMissionControlBot("renewal-bot");
 const mlsBot = getMissionControlBot("mls-bot");
 const propertyOnboardingBot = getMissionControlBot("property-onboarding-bot");
+const missionControlBot = getMissionControlBot("mission-control");
 
 export const tools: ToolLink[] = [
   {
@@ -129,10 +130,14 @@ export const tools: ToolLink[] = [
     url: "/property-health-analyzer",
   },
   {
-  name: "Mission Control",
+  name: "Coco XR Mission Control",
   description: "View bot health, last runs, failures, and CAPTCHA status.",
-  url: "http://206.81.13.133:8790/",
   category: "Operations",
-  icon: "Bot",
+  url: "http://206.81.13.133:8790/",
+  bot: {
+    label: missionControlBot?.name || "Mission Control",
+    status: missionControlBot?.status || "Unknown",
+    lastRun: missionControlBot?.lastRun,
+  },
 }
 ];
