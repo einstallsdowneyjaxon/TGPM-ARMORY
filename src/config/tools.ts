@@ -144,4 +144,11 @@ export const tools: ToolLink[] = [
     category: "Budgeting",
     url: "/property-health-analyzer",
   },
+  {
+    name: "MyHome Admin Control",
+    description:
+      "Manage resident welcome packets, copy secure magic links, and launch inspector data capture sessions.",
+    category: "Resident",
+    url: "https://vercel.app",
+  },
 ];
