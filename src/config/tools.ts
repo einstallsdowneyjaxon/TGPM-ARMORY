@@ -149,6 +149,6 @@ export const tools: ToolLink[] = [
     description:
       "Manage resident welcome packets, copy secure magic links, and launch inspector data capture sessions.",
     category: "Resident",
-    url: "https://vercel.app",
+    url: "https://tgpm-myhome.vercel.app",
   },
 ];
