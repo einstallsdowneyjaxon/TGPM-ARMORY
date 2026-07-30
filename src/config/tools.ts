@@ -144,4 +144,11 @@ export const tools: ToolLink[] = [
     category: "Budgeting",
     url: "/property-health-analyzer",
   },
+  {
+    name: "Move-Out Inspector",
+    description:
+      "Upload move-in and move-out inspection PDFs to identify new damage, pre-existing conditions, and resolved items.",
+    category: "Operations",
+    url: "/move-out-inspector",
+  },
 ];
