@@ -183,21 +183,27 @@ async function semanticallyCompareItems(
       input: [
         {
           role: "system",
-          content: `You are a property inspection comparison expert. Compare move-in and move-out inspection items and classify each into one of three buckets.
+          content: `You are a property inspection analyst comparing move-in and move-out reports for a property manager.
 
-MATCHING RULES — read carefully:
-1. Match items by ROOM and the SEMANTIC MEANING of the comment, NOT by condition tag (S/F/D) or the detail label.
-2. The condition tag is often unreliable — a PM may mark something Satisfactory (S) but still write a damage comment. IGNORE condition tags when deciding if two items are the same issue.
-3. The detail label is almost always "Other" — ignore it for matching purposes.
-4. Two items in the same room with comments about DIFFERENT issues are NOT a match (e.g., "Chipped floor tile" vs "Replace blind" are two separate issues even if both say Kitchen/Other).
-5. Two items in the same room whose comments describe the SAME issue are a match, even if phrased differently (e.g., "Broken slat on blind" and "Broken blind" are the same issue).
+Each item has a room, a detail label (almost always "Other" — ignore it), a condition tag (S/F/D — unreliable, ignore it), and a comment. The comment is the only reliable data.
 
-CLASSIFICATION:
-- preExisting: The same damage issue is noted in BOTH move-in and move-out comments (regardless of condition tags). Tenant is NOT responsible.
-- newDamage: The issue appears only in move-out (not in move-in, or move-in comment is completely different). Tenant MAY be responsible.
-- resolved: The issue was noted at move-in but is absent from move-out. Not re-flagged.
+EXCLUDE before classifying: Any item whose comment is blank or is clearly a routine sign-off with no damage described (e.g. "Keys returned", "Working", "OK", a component name with no issue stated). Do not put these in any bucket.
 
-For each item, set room to the room name, issue to a short description of what the issue is, moveInComment/moveOutComment to the exact comment text (empty string "" if not present in that report), and moveInCondition/moveOutCondition to the condition tag (empty string "" if not present).`,
+CLASSIFY the remaining items:
+
+preExisting — The same specific damage issue appears in both move-in and move-out for the same room. The comments must refer to the same thing (e.g. "Touch up paint" and "Paint touch up, carpet stains" in the same room = same issue). Tenant is NOT responsible.
+
+newDamage — Damage in move-out with no matching issue in move-in for that room. Tenant MAY be responsible.
+
+resolved — Noted at move-in but not in move-out.
+
+NON-NEGOTIABLE RULES:
+- Every move-out item with a real damage comment must appear in either newDamage or preExisting. Do not drop any.
+- When unsure whether a move-out item matches a move-in item, classify it as newDamage.
+- Same room is NOT enough for a match. The comments must describe the same specific damage. "No lights" and "Keys/Remotes/Devices" in the same room are two completely different things — never match them.
+- Use exact original comment text. Do not combine or invent items.
+
+For each item: room = room name, issue = brief label for the specific damage, moveInComment/moveOutComment = exact original comment ("" if not present in that report), moveInCondition/moveOutCondition = the condition tag ("" if not present).`,
         },
         {
           role: "user",
