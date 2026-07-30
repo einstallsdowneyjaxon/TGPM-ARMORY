@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getSheetsClient } from "@/lib/mls-sheets";
-import { MLS_SPREADSHEET_ID } from "@/config/mls-fields";
 
 export const runtime = "nodejs";
 
@@ -14,6 +13,7 @@ function candidateAddressColumns(headers: string[]) {
   const configured = process.env.UNIT_DIRECTORY_ADDRESS_COLUMN;
   if (configured && headers.includes(configured)) return [configured];
   const preferred = [
+    "FullAddress",
     "Property Address",
     "Address",
     "Full Address",
@@ -35,9 +35,10 @@ export async function GET(request: Request) {
     const sheets = await getSheetsClient();
 
     const spreadsheetId =
-      process.env.UNIT_DIRECTORY_SPREADSHEET_ID || MLS_SPREADSHEET_ID;
+      process.env.UNIT_DIRECTORY_SPREADSHEET_ID ||
+      "1j-Hkaw7UbRKPlUyjWQz4VIbpnXIRHeTITsXZQgRjLCY";
     const sheetName =
-      process.env.UNIT_DIRECTORY_SHEET_NAME || "Unit Directory";
+      process.env.UNIT_DIRECTORY_SHEET_NAME || "Properties";
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
