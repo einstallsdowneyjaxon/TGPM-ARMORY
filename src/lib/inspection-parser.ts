@@ -183,21 +183,27 @@ async function semanticallyCompareItems(
       input: [
         {
           role: "system",
-          content: `You are a property inspection comparison expert. Compare move-in and move-out inspection items and classify each into one of three buckets.
+          content: `You are a property inspection comparison expert. Compare move-in and move-out inspection items and classify each into three buckets.
 
-MATCHING RULES — read carefully:
-1. Match items by ROOM and the SEMANTIC MEANING of the comment, NOT by condition tag (S/F/D) or the detail label.
-2. The condition tag is often unreliable — a PM may mark something Satisfactory (S) but still write a damage comment. IGNORE condition tags when deciding if two items are the same issue.
-3. The detail label is almost always "Other" — ignore it for matching purposes.
-4. Two items in the same room with comments about DIFFERENT issues are NOT a match (e.g., "Chipped floor tile" vs "Replace blind" are two separate issues even if both say Kitchen/Other).
-5. Two items in the same room whose comments describe the SAME issue are a match, even if phrased differently (e.g., "Broken slat on blind" and "Broken blind" are the same issue).
+STEP 1 — FILTER FIRST:
+Exclude any item that is Satisfactory (S) with no real damage comment (e.g. pure sign-offs like "Keys returned", "Working", "OK", blank, or a component name with no damage description). These are routine checklist items, not damage, and must NOT appear in any bucket.
 
-CLASSIFICATION:
-- preExisting: The same damage issue is noted in BOTH move-in and move-out comments (regardless of condition tags). Tenant is NOT responsible.
-- newDamage: The issue appears only in move-out (not in move-in, or move-in comment is completely different). Tenant MAY be responsible.
-- resolved: The issue was noted at move-in but is absent from move-out. Not re-flagged.
+STEP 2 — MATCHING RULES:
+1. Match items by ROOM and the SPECIFIC SUBJECT of the damage comment — NOT by condition tag (S/F/D) or the detail label.
+2. The condition tag is unreliable — a PM may mark an item Satisfactory but still write a real damage comment to avoid a red report for the owner. IGNORE condition tags entirely when deciding if two items match.
+3. The "detail" label is almost always "Other" — ignore it for matching.
+4. Two items are a match ONLY if their comments describe the SAME specific damage (e.g. "Broken slat on blind" and "Broken blind" in the same room = match). Room co-location alone is not enough.
+5. Two items in the same room with comments about DIFFERENT subjects are NEVER a match (e.g. "No lights" and "Keys/Remotes/Devices" are completely different things — do not match them).
 
-For each item, set room to the room name, issue to a short description of what the issue is, moveInComment/moveOutComment to the exact comment text (empty string "" if not present in that report), and moveInCondition/moveOutCondition to the condition tag (empty string "" if not present).`,
+STEP 3 — CLASSIFICATION:
+- preExisting: Same specific damage issue appears in BOTH move-in and move-out comments.
+- newDamage: Issue appears only in move-out, or only the move-out has a meaningful damage comment.
+- resolved: Issue was noted at move-in but absent from move-out.
+
+COMPLETENESS — CRITICAL:
+Every move-out item that has a real damage comment MUST appear in either newDamage or preExisting. Do not omit any. When in doubt, put it in newDamage.
+
+For each item: room = room name, issue = brief label for the specific damage, moveInComment/moveOutComment = exact original comment text ("" if not present in that report), moveInCondition/moveOutCondition = the condition tag ("" if not present).`,
         },
         {
           role: "user",
