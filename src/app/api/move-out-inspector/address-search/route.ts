@@ -1,33 +1,14 @@
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
+import { getSheetsClient } from "@/lib/mls-sheets";
+import { MLS_SPREADSHEET_ID } from "@/config/mls-fields";
 
 export const runtime = "nodejs";
 
-// Configure via env vars:
+// Configure via Vercel environment variables:
 //   UNIT_DIRECTORY_SPREADSHEET_ID  – spreadsheet containing the unit directory
+//                                    (defaults to MLS_SPREADSHEET_ID if not set)
 //   UNIT_DIRECTORY_SHEET_NAME      – sheet/tab name (default: "Unit Directory")
-//   UNIT_DIRECTORY_ADDRESS_COLUMN  – column header to use as address (default: auto-detect)
-//
-// Authentication reuses the same GOOGLE_SERVICE_ACCOUNT_JSON /
-// GOOGLE_CREDENTIALS_JSON / GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 env vars
-// already used by the MLS Sheets integration.
-
-type GoogleCredentials = {
-  client_email: string;
-  private_key: string;
-};
-
-function parseServiceAccountCredentials(): GoogleCredentials | null {
-  const raw =
-    process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
-    process.env.GOOGLE_CREDENTIALS_JSON;
-  const encoded = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64;
-  if (!raw && !encoded) return null;
-  const json = raw || Buffer.from(encoded ?? "", "base64").toString("utf8");
-  const parsed = JSON.parse(json) as Partial<GoogleCredentials>;
-  if (!parsed.client_email || !parsed.private_key) return null;
-  return parsed as GoogleCredentials;
-}
+//   UNIT_DIRECTORY_ADDRESS_COLUMN  – address column header (default: auto-detect)
 
 function candidateAddressColumns(headers: string[]) {
   const configured = process.env.UNIT_DIRECTORY_ADDRESS_COLUMN;
@@ -51,26 +32,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const credentials = parseServiceAccountCredentials();
-    if (!credentials) {
-      return NextResponse.json({ addresses: [] });
-    }
+    const sheets = await getSheetsClient();
 
-    const auth = new google.auth.JWT({
-      email: credentials.client_email,
-      key: credentials.private_key.replace(/\\n/g, "\n"),
-      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-    });
-
-    const sheets = google.sheets({ version: "v4", auth });
     const spreadsheetId =
-      process.env.UNIT_DIRECTORY_SPREADSHEET_ID ||
-      process.env.MLS_SPREADSHEET_ID;
-
-    if (!spreadsheetId) {
-      return NextResponse.json({ addresses: [] });
-    }
-
+      process.env.UNIT_DIRECTORY_SPREADSHEET_ID || MLS_SPREADSHEET_ID;
     const sheetName =
       process.env.UNIT_DIRECTORY_SHEET_NAME || "Unit Directory";
 
@@ -106,8 +71,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const addresses = Array.from(matches).slice(0, 10);
-    return NextResponse.json({ addresses });
+    return NextResponse.json({ addresses: Array.from(matches).slice(0, 10) });
   } catch {
     return NextResponse.json({ addresses: [] });
   }

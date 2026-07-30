@@ -139,7 +139,7 @@ async function getOAuthAuth() {
   return oauth2Client;
 }
 
-async function getSheetsClient() {
+export async function getSheetsClient() {
   if (sheetsClient) return sheetsClient;
 
   const credentials = parseServiceAccountCredentials();
