@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
-import { PDFParse } from "pdf-parse";
+import { extractText } from "unpdf";
 import { compareInspections } from "@/lib/inspection-parser";
 
 export const runtime = "nodejs";
+
+async function pdfToText(buffer: Buffer): Promise<string> {
+  const result = await extractText(new Uint8Array(buffer));
+  return result.text.join("\n");
+}
 
 export async function POST(request: Request) {
   try {
@@ -28,7 +33,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!moveInFile.name.toLowerCase().endsWith(".pdf") || !moveOutFile.name.toLowerCase().endsWith(".pdf")) {
+    if (
+      !moveInFile.name.toLowerCase().endsWith(".pdf") ||
+      !moveOutFile.name.toLowerCase().endsWith(".pdf")
+    ) {
       return NextResponse.json(
         { error: "Both uploaded files must be PDFs." },
         { status: 400 },
@@ -40,19 +48,9 @@ export async function POST(request: Request) {
       moveOutFile.arrayBuffer().then((ab) => Buffer.from(ab)),
     ]);
 
-    async function extractText(buffer: Buffer): Promise<string> {
-      const parser = new PDFParse({ data: new Uint8Array(buffer) });
-      try {
-        const result = await parser.getText();
-        return result.text;
-      } finally {
-        await parser.destroy();
-      }
-    }
-
     const [moveInText, moveOutText] = await Promise.all([
-      extractText(moveInBuffer),
-      extractText(moveOutBuffer),
+      pdfToText(moveInBuffer),
+      pdfToText(moveOutBuffer),
     ]);
 
     const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
