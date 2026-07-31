@@ -12,8 +12,10 @@ type TenantRecord = {
   firstName: string;
   lastName: string;
   moveIn: string;
+  moveOut: string;
   deposit: string;
   status: string;
+  tenantNotes: string;
 };
 
 function parseTenantCsv(text: string): TenantRecord[] {
@@ -28,8 +30,10 @@ function parseTenantCsv(text: string): TenantRecord[] {
       firstName: row["First Name"]?.trim() ?? "",
       lastName: row["Last Name"]?.trim() ?? "",
       moveIn: row["Move-in"]?.trim() ?? "",
+      moveOut: row["Move-out"]?.trim() ?? "",
       deposit: row["Deposit"]?.trim() ?? "",
       status: row["Status"]?.trim() ?? "",
+      tenantNotes: row["Tenant Notes"]?.trim() ?? "",
     }));
 }
 
@@ -244,39 +248,65 @@ function PdfUploadZone({
 // ─── Tenant info banner ───────────────────────────────────────────────────────
 
 function TenantInfoBanner({ tenant }: { tenant: TenantRecord }) {
+  const [notesOpen, setNotesOpen] = useState(false);
   const fullName = [tenant.firstName, tenant.lastName].filter(Boolean).join(" ");
   return (
-    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 rounded-lg border border-[#eadfd5] bg-[#fff8f4] px-4 py-3 text-sm">
-      {fullName ? (
-        <span>
-          <span className="font-medium text-[#344054]">Tenant: </span>
-          <span className="text-[#101828] font-semibold">{fullName}</span>
-        </span>
-      ) : null}
-      {tenant.moveIn ? (
-        <span>
-          <span className="font-medium text-[#344054]">Move-In: </span>
-          <span className="text-[#101828]">{tenant.moveIn}</span>
-        </span>
-      ) : null}
-      {tenant.deposit ? (
-        <span>
-          <span className="font-medium text-[#344054]">Deposit on File: </span>
-          <span className="text-[#101828] font-semibold">${tenant.deposit}</span>
-        </span>
-      ) : null}
-      {tenant.status ? (
-        <span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-              tenant.status === "Current"
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-amber-100 text-amber-700"
-            }`}
-          >
-            {tenant.status}
+    <div className="mt-3 rounded-lg border border-[#eadfd5] bg-[#fff8f4] px-4 py-3 text-sm">
+      <div className="flex flex-wrap gap-x-6 gap-y-1">
+        {fullName ? (
+          <span>
+            <span className="font-medium text-[#344054]">Tenant: </span>
+            <span className="font-semibold text-[#101828]">{fullName}</span>
           </span>
-        </span>
+        ) : null}
+        {tenant.moveIn ? (
+          <span>
+            <span className="font-medium text-[#344054]">Move-In: </span>
+            <span className="text-[#101828]">{tenant.moveIn}</span>
+          </span>
+        ) : null}
+        {tenant.moveOut ? (
+          <span>
+            <span className="font-medium text-[#344054]">Move-Out: </span>
+            <span className="text-[#101828]">{tenant.moveOut}</span>
+          </span>
+        ) : null}
+        {tenant.deposit ? (
+          <span>
+            <span className="font-medium text-[#344054]">Deposit on File: </span>
+            <span className="font-semibold text-[#101828]">${tenant.deposit}</span>
+          </span>
+        ) : null}
+        {tenant.status ? (
+          <span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                tenant.status === "Current"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {tenant.status}
+            </span>
+          </span>
+        ) : null}
+      </div>
+      {tenant.tenantNotes ? (
+        <div className="mt-2 border-t border-[#eadfd5] pt-2">
+          <button
+            type="button"
+            onClick={() => setNotesOpen((o) => !o)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-[#b74119] transition hover:text-[#8c2d12]"
+          >
+            <ChevronIcon collapsed={!notesOpen} className="h-3.5 w-3.5" />
+            Tenant Notes
+          </button>
+          {notesOpen ? (
+            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#475467]">
+              {tenant.tenantNotes}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
@@ -363,7 +393,9 @@ function buildClipboardText(
       .join(" ");
     if (fullName) lines.push(`Tenant:        ${fullName}`);
     if (tenant.moveIn) lines.push(`Move-In Date:  ${tenant.moveIn}`);
+    if (tenant.moveOut) lines.push(`Move-Out Date: ${tenant.moveOut}`);
     if (tenant.deposit) lines.push(`Deposit:       $${tenant.deposit}`);
+    if (tenant.tenantNotes) lines.push(`Tenant Notes:  ${tenant.tenantNotes}`);
   }
   lines.push(`Move-In:       ${result.moveInDate}`);
   lines.push(`Move-Out:      ${result.moveOutDate}`);
@@ -762,6 +794,23 @@ function PdfIcon({ className }: { className?: string }) {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ collapsed, className }: { collapsed: boolean; className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`transition-transform ${collapsed ? "" : "rotate-180"} ${className ?? ""}`}
+    >
+      <polyline points="6 9 12 15 18 9" />
     </svg>
   );
 }

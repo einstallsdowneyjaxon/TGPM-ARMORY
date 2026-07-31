@@ -13,6 +13,7 @@ function candidateAddressColumns(headers: string[]) {
   const configured = process.env.UNIT_DIRECTORY_ADDRESS_COLUMN;
   if (configured && headers.includes(configured)) return [configured];
   const preferred = [
+    "Tenant Address",
     "FullAddress",
     "Property Address",
     "Address",
@@ -36,9 +37,9 @@ export async function GET(request: Request) {
 
     const spreadsheetId =
       process.env.UNIT_DIRECTORY_SPREADSHEET_ID ||
-      "1j-Hkaw7UbRKPlUyjWQz4VIbpnXIRHeTITsXZQgRjLCY";
+      "1Bt7qKse7LFT1bRs3dqvZSsA7gnZkJJ6yj7WYNmvrN1o";
     const sheetName =
-      process.env.UNIT_DIRECTORY_SHEET_NAME || "Properties";
+      process.env.UNIT_DIRECTORY_SHEET_NAME || "Sheet1";
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
