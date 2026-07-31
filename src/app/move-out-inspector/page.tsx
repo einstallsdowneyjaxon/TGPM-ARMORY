@@ -18,22 +18,32 @@ type TenantRecord = {
   tenantNotes: string;
 };
 
+function col(row: Record<string, string>, ...names: string[]): string {
+  for (const name of names) {
+    const val = row[name]?.trim();
+    if (val) return val;
+  }
+  return "";
+}
+
 function parseTenantCsv(text: string): TenantRecord[] {
   const result = Papa.parse<Record<string, string>>(text, {
     header: true,
     skipEmptyLines: true,
   });
   return result.data
-    .filter((row) => row["Tenant Address"]?.trim())
+    .filter((row) =>
+      col(row, "Property Address", "Tenant Address", "FullAddress"),
+    )
     .map((row) => ({
-      address: row["Tenant Address"]?.trim() ?? "",
-      firstName: row["First Name"]?.trim() ?? "",
-      lastName: row["Last Name"]?.trim() ?? "",
-      moveIn: row["Move-in"]?.trim() ?? "",
-      moveOut: row["Move-out"]?.trim() ?? "",
-      deposit: row["Deposit"]?.trim() ?? "",
-      status: row["Status"]?.trim() ?? "",
-      tenantNotes: row["Tenant Notes"]?.trim() ?? "",
+      address: col(row, "Property Address", "Tenant Address", "FullAddress"),
+      firstName: col(row, "First Name"),
+      lastName: col(row, "Last Name"),
+      moveIn: col(row, "Move-in", "Move In"),
+      moveOut: col(row, "Move-out", "Move Out"),
+      deposit: col(row, "Deposit"),
+      status: col(row, "Status"),
+      tenantNotes: col(row, "Tenant Notes"),
     }));
 }
 
@@ -434,12 +444,38 @@ export default function MoveOutInspectorPage() {
   const [moveOutFile, setMoveOutFile] = useState<File | null>(null);
   const [tenantCsvFile, setTenantCsvFile] = useState<File | null>(null);
   const [tenantRecords, setTenantRecords] = useState<TenantRecord[]>([]);
+  const [tenantLoadStatus, setTenantLoadStatus] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<InspectionResult | null>(null);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
 
-  // Load tenant CSV when file is selected
+  // Auto-load tenant records from the public Google Sheet on mount
+  useEffect(() => {
+    async function loadFromSheet() {
+      setTenantLoadStatus("loading");
+      try {
+        const res = await fetch("/api/move-out-inspector/tenant-data");
+        const data = (await res.json()) as {
+          records?: TenantRecord[];
+          error?: string;
+        };
+        if (data.records && data.records.length > 0) {
+          setTenantRecords(data.records);
+          setTenantLoadStatus("loaded");
+        } else {
+          setTenantLoadStatus("error");
+        }
+      } catch {
+        setTenantLoadStatus("error");
+      }
+    }
+    void loadFromSheet();
+  }, []);
+
+  // CSV upload overrides the sheet data when provided
   useEffect(() => {
     if (!tenantCsvFile) return;
     const reader = new FileReader();
@@ -447,7 +483,8 @@ export default function MoveOutInspectorPage() {
       const text = e.target?.result as string;
       const records = parseTenantCsv(text);
       setTenantRecords(records);
-      showToast(`Loaded ${records.length} tenant records`);
+      setTenantLoadStatus("loaded");
+      showToast(`Loaded ${records.length} records from CSV`);
     };
     reader.readAsText(tenantCsvFile);
   }, [tenantCsvFile]);
@@ -551,24 +588,30 @@ export default function MoveOutInspectorPage() {
 
           {/* Upload form */}
           <section className="no-print mt-6 rounded-lg border border-[#eadfd5] bg-white p-5 shadow-sm">
-            {/* Tenant directory CSV */}
+            {/* Tenant directory status */}
             <div className="mb-5 rounded-lg border border-[#eadfd5] bg-[#fbfaf8] p-4">
               <div className="flex items-center justify-between gap-3">
-                <div>
+                <div className="flex-1">
                   <p className="text-sm font-semibold text-[#344054]">
-                    Tenant Directory CSV
+                    Tenant Directory
                   </p>
-                  <p className="mt-0.5 text-xs text-[#667085]">
-                    Upload your daily tenant directory export to enable address
-                    autocomplete and auto-populate tenant name, move-in date,
-                    and deposit.
-                  </p>
+                  {tenantLoadStatus === "loading" ? (
+                    <p className="mt-1 text-xs text-[#667085]">
+                      Loading tenant records from Google Sheet…
+                    </p>
+                  ) : tenantLoadStatus === "loaded" ? (
+                    <p className="mt-1 text-xs text-emerald-700">
+                      ✓ {tenantRecords.length} properties loaded — address autocomplete and tenant info active
+                    </p>
+                  ) : tenantLoadStatus === "error" ? (
+                    <p className="mt-1 text-xs text-amber-700">
+                      Could not load from sheet — upload the daily CSV below as a fallback
+                    </p>
+                  ) : null}
                 </div>
                 <label className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-[#eadfd5] bg-white px-3 text-sm font-semibold text-[#344054] shadow-sm transition hover:border-[#f05a28] hover:text-[#b74119]">
                   <CsvIcon className="h-4 w-4" />
-                  {tenantCsvFile
-                    ? tenantCsvFile.name
-                    : "Upload tenant_directory.csv"}
+                  {tenantCsvFile ? tenantCsvFile.name : "Override with CSV"}
                   <input
                     type="file"
                     accept=".csv,text/csv"
@@ -579,12 +622,6 @@ export default function MoveOutInspectorPage() {
                   />
                 </label>
               </div>
-              {tenantRecords.length > 0 ? (
-                <p className="mt-2 text-xs text-emerald-700">
-                  ✓ {tenantRecords.length} properties loaded — address
-                  autocomplete active
-                </p>
-              ) : null}
             </div>
 
             {/* Address search */}
