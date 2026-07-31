@@ -227,6 +227,37 @@ RULES:
   return JSON.parse(text) as ComparisonRaw;
 }
 
+// ─── Room grouping ────────────────────────────────────────────────────────────
+
+function groupCardsByRoom(cards: IssueCard[]): IssueCard[] {
+  const roomMap = new Map<
+    string,
+    { room: string; issues: string[]; moveInComments: string[]; moveOutComments: string[] }
+  >();
+
+  for (const card of cards) {
+    const key = card.room.toLowerCase().trim();
+    if (!roomMap.has(key)) {
+      roomMap.set(key, { room: card.room, issues: [], moveInComments: [], moveOutComments: [] });
+    }
+    const group = roomMap.get(key)!;
+    if (!group.issues.includes(card.issue)) group.issues.push(card.issue);
+    if (card.moveInComment && !group.moveInComments.includes(card.moveInComment)) {
+      group.moveInComments.push(card.moveInComment);
+    }
+    if (!group.moveOutComments.includes(card.moveOutComment)) {
+      group.moveOutComments.push(card.moveOutComment);
+    }
+  }
+
+  return Array.from(roomMap.values()).map((g) => ({
+    room: g.room,
+    issue: g.issues.join(", "),
+    moveInComment: g.moveInComments.join(", "),
+    moveOutComment: g.moveOutComments.join(", "),
+  }));
+}
+
 // ─── Auto-charge detection ────────────────────────────────────────────────────
 
 function detectCharge(room: string, issue: string, comment: string): string {
@@ -283,14 +314,17 @@ export async function compareInspections(
   // Step 2: build one card per move-out issue with move-in context
   const comparison = await buildCards(moveIn.items, moveOut.items, apiKey, model);
 
-  const cards: IssueCard[] = comparison.cards.map((c) => ({
+  const rawCards: IssueCard[] = comparison.cards.map((c) => ({
     room: c.room,
     issue: c.issue,
     moveInComment: c.moveInComment,
     moveOutComment: c.moveOutComment,
   }));
 
-  // Step 3: build itemized list in TypeScript (new items + auto-charges)
+  // Step 3: group individual issue cards by room → one card per room
+  const cards = groupCardsByRoom(rawCards);
+
+  // Step 4: build itemized list in TypeScript (new items + auto-charges)
   const newDamageList = buildNewDamageList(cards);
 
   return {
