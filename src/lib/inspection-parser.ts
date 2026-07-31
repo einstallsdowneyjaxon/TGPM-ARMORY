@@ -1,29 +1,36 @@
+// ─── Public types ─────────────────────────────────────────────────────────────
+
+export type IssueCard = {
+  room: string;
+  issue: string;
+  moveInComment: string;   // empty string means "not noted at move-in"
+  moveOutComment: string;
+};
+
+export type ListItem = {
+  room: string;
+  comment: string;
+  charge: string;          // empty string means no auto-charge
+};
+
+export type InspectionResult = {
+  property: string;
+  tenantName: string;
+  moveInDate: string;
+  moveOutDate: string;
+  cards: IssueCard[];
+  newDamageList: ListItem[];
+  itemCount: { moveIn: number; moveOut: number };
+};
+
+// ─── Extraction ───────────────────────────────────────────────────────────────
+
 export type InspectionItem = {
   area: string;
   detail: string;
   condition: "S" | "F" | "D";
   comment: string;
 };
-
-export type MatchedItem = {
-  area: string;
-  detail: string;
-  moveIn: { condition: string; comment: string } | null;
-  moveOut: { condition: string; comment: string } | null;
-};
-
-export type InspectionComparison = {
-  property: string;
-  tenantName: string;
-  moveInDate: string;
-  moveOutDate: string;
-  newDamage: MatchedItem[];
-  preExisting: MatchedItem[];
-  resolved: MatchedItem[];
-  itemCount: { moveIn: number; moveOut: number };
-};
-
-// ─── Extraction ───────────────────────────────────────────────────────────────
 
 type ExtractionResult = {
   property: string;
@@ -74,7 +81,7 @@ async function extractInspectionItems(
         {
           role: "system",
           content:
-            "You are a property inspection data extractor. Extract ALL inspection items from this zInspector report text. Each item has an area (room/zone such as 'Kitchen' or 'Bedroom: Primary'), a detail (specific component such as 'Refrigerator' or 'Other'), a condition (S=Satisfactory, F=Fair, D=Damaged), and a comment (include even if condition is S — sometimes items are marked Satisfactory but still have a damage comment). Include every item you find. Also extract the property address, tenant name (leave blank if not listed), and inspection date (YYYY-MM-DD). De-duplicate items that appear in both the summary table and the per-area sections — keep only one entry per unique area+detail combination.",
+            "You are a property inspection data extractor. Extract ALL inspection items from this zInspector report text. Each item has an area (room/zone), a detail (component, usually 'Other'), a condition (S/F/D), and a comment. Include every item found, including Satisfactory ones — some Satisfactory items still have real damage comments. Also extract property address, tenant name (blank if not listed), and inspection date (YYYY-MM-DD). De-duplicate items that appear in both the summary and per-area sections.",
         },
         { role: "user", content: rawText },
       ],
@@ -91,9 +98,7 @@ async function extractInspectionItems(
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(
-      `OpenAI extraction failed (${response.status}): ${summarizeError(errText)}`,
-    );
+    throw new Error(`OpenAI extraction failed (${response.status}): ${summarizeError(errText)}`);
   }
 
   const result = await response.json();
@@ -102,56 +107,41 @@ async function extractInspectionItems(
   return JSON.parse(text) as ExtractionResult;
 }
 
-// ─── Semantic comparison ──────────────────────────────────────────────────────
+// ─── Comparison ───────────────────────────────────────────────────────────────
 
-type ComparedItemRaw = {
+type CardRaw = {
   room: string;
   issue: string;
   moveInComment: string;
   moveOutComment: string;
-  moveInCondition: string;
-  moveOutCondition: string;
 };
 
 type ComparisonRaw = {
-  newDamage: ComparedItemRaw[];
-  preExisting: ComparedItemRaw[];
-  resolved: ComparedItemRaw[];
+  cards: CardRaw[];
 };
 
-const comparedItemSchema = {
+const cardSchema = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "room",
-    "issue",
-    "moveInComment",
-    "moveOutComment",
-    "moveInCondition",
-    "moveOutCondition",
-  ],
+  required: ["room", "issue", "moveInComment", "moveOutComment"],
   properties: {
     room: { type: "string" },
     issue: { type: "string" },
     moveInComment: { type: "string" },
     moveOutComment: { type: "string" },
-    moveInCondition: { type: "string" },
-    moveOutCondition: { type: "string" },
   },
 };
 
 const comparisonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["newDamage", "preExisting", "resolved"],
+  required: ["cards"],
   properties: {
-    newDamage: { type: "array", items: comparedItemSchema },
-    preExisting: { type: "array", items: comparedItemSchema },
-    resolved: { type: "array", items: comparedItemSchema },
+    cards: { type: "array", items: cardSchema },
   },
 };
 
-async function semanticallyCompareItems(
+async function buildCards(
   moveInItems: InspectionItem[],
   moveOutItems: InspectionItem[],
   apiKey: string,
@@ -183,31 +173,42 @@ async function semanticallyCompareItems(
       input: [
         {
           role: "system",
-          content: `You are a property inspection comparison expert. Compare move-in and move-out inspection items and classify each into one of three buckets.
+          content: `You are a property inspection analyst comparing move-in and move-out reports for a property manager.
 
-MATCHING RULES — read carefully:
-1. Match items by ROOM and the SEMANTIC MEANING of the comment, NOT by condition tag (S/F/D) or the detail label.
-2. The condition tag is often unreliable — a PM may mark something Satisfactory (S) but still write a damage comment. IGNORE condition tags when deciding if two items are the same issue.
-3. The detail label is almost always "Other" — ignore it for matching purposes.
-4. Two items in the same room with comments about DIFFERENT issues are NOT a match (e.g., "Chipped floor tile" vs "Replace blind" are two separate issues even if both say Kitchen/Other).
-5. Two items in the same room whose comments describe the SAME issue are a match, even if phrased differently (e.g., "Broken slat on blind" and "Broken blind" are the same issue).
+Your job: For every damage or issue noted in the MOVE-OUT report, produce one card. Each card shows what was noted at move-out AND whether the same specific issue was also noted at move-in.
 
-CLASSIFICATION:
-- preExisting: The same damage issue is noted in BOTH move-in and move-out comments (regardless of condition tags). Tenant is NOT responsible.
-- newDamage: The issue appears only in move-out (not in move-in, or move-in comment is completely different). Tenant MAY be responsible.
-- resolved: The issue was noted at move-in but is absent from move-out. Not re-flagged.
+INPUT: Two JSON arrays of inspection items. Each item has: room, detail, condition, comment.
 
-For each item, set room to the room name, issue to a short description of what the issue is, moveInComment/moveOutComment to the exact comment text (empty string "" if not present in that report), and moveInCondition/moveOutCondition to the condition tag (empty string "" if not present).`,
+OUTPUT: An array of cards, one per move-out issue.
+
+RULES:
+
+1. The comment is the only reliable data. Ignore condition tags (S/F/D) — they are unreliable. Ignore the detail field (it is almost always "Other").
+
+2. EXCLUDE move-out items with blank comments or routine sign-offs that describe no damage (e.g. "OK", "Working", "Keys returned", a component name with no actual issue stated). Do not create cards for these.
+
+3. For each qualifying move-out item, check if the SAME specific damage exists in the move-in report for the same room:
+   - If yes: set moveInComment to the exact move-in comment text.
+   - If no: set moveInComment to "" (empty string).
+   - Match only when the comments describe the same specific thing. Being in the same room is not enough — "No lights" and "Keys/Remotes/Devices" in the same room are completely different issues.
+
+4. Room name normalization: treat these as the same room (use the MOVE-OUT room name on every card):
+   - "Master Bedroom" = "Primary Bedroom" = "Bedroom: Primary"
+   - "Master Bath" = "Master Bathroom" = "Primary Bathroom" = "Bathroom: Primary"
+   - Any other obvious alternate names for the same room
+
+5. Every qualifying move-out comment gets its own card. Do not combine multiple distinct issues into one card.
+
+6. Use exact original comment text. Do not rewrite, shorten, or combine comments.
+
+7. issue = a short label for the damage (e.g. "Slow drain", "Paint touch up", "Replace carpet").`,
         },
-        {
-          role: "user",
-          content: JSON.stringify(payload),
-        },
+        { role: "user", content: JSON.stringify(payload) },
       ],
       text: {
         format: {
           type: "json_schema",
-          name: "inspection_comparison",
+          name: "inspection_cards",
           strict: true,
           schema: comparisonSchema,
         },
@@ -217,9 +218,7 @@ For each item, set room to the room name, issue to a short description of what t
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(
-      `OpenAI comparison failed (${response.status}): ${summarizeError(errText)}`,
-    );
+    throw new Error(`OpenAI comparison failed (${response.status}): ${summarizeError(errText)}`);
   }
 
   const result = await response.json();
@@ -228,19 +227,43 @@ For each item, set room to the room name, issue to a short description of what t
   return JSON.parse(text) as ComparisonRaw;
 }
 
-function toMatchedItem(item: ComparedItemRaw): MatchedItem {
-  return {
-    area: item.room,
-    detail: item.issue,
-    moveIn:
-      item.moveInComment
-        ? { condition: item.moveInCondition, comment: item.moveInComment }
-        : null,
-    moveOut:
-      item.moveOutComment
-        ? { condition: item.moveOutCondition, comment: item.moveOutComment }
-        : null,
-  };
+// ─── Auto-charge detection ────────────────────────────────────────────────────
+
+function detectCharge(room: string, issue: string, comment: string): string {
+  const text = `${room} ${issue} ${comment}`.toLowerCase();
+
+  if (/filter/.test(text)) {
+    return "Add HVAC Service/Coil Clean charge";
+  }
+  if (/slow.?drain/.test(text)) {
+    return "Add Sink snake out charge";
+  }
+  if (/\bmow\b|long grass|overgrown|\bweed|trim limb|trim tree|raise canopy/.test(text)) {
+    return "Add Landscaping charge";
+  }
+  return "";
+}
+
+// ─── Itemized list builder ─────────────────────────────────────────────────────
+
+function buildNewDamageList(cards: IssueCard[]): ListItem[] {
+  const list: ListItem[] = [];
+
+  for (const card of cards) {
+    const isNew = card.moveInComment === "";
+    const charge = detectCharge(card.room, card.issue, card.moveOutComment);
+
+    if (isNew) {
+      // New damage — always appears in the list, with charge if applicable
+      list.push({ room: card.room, comment: card.moveOutComment, charge });
+    } else if (charge) {
+      // Pre-existing but triggers an auto-charge — add the charge line
+      list.push({ room: card.room, comment: card.moveOutComment, charge });
+    }
+    // Pre-existing with no charge — skip; PM sees it on the card
+  }
+
+  return list;
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
@@ -250,29 +273,33 @@ export async function compareInspections(
   moveOutText: string,
   apiKey: string,
   model = "gpt-4.1-mini",
-): Promise<InspectionComparison> {
+): Promise<InspectionResult> {
   // Step 1: extract items from both PDFs in parallel
   const [moveIn, moveOut] = await Promise.all([
     extractInspectionItems(moveInText, apiKey, model),
     extractInspectionItems(moveOutText, apiKey, model),
   ]);
 
-  // Step 2: semantic comparison — AI matches by room + comment, ignores condition tags
-  const comparison = await semanticallyCompareItems(
-    moveIn.items,
-    moveOut.items,
-    apiKey,
-    model,
-  );
+  // Step 2: build one card per move-out issue with move-in context
+  const comparison = await buildCards(moveIn.items, moveOut.items, apiKey, model);
+
+  const cards: IssueCard[] = comparison.cards.map((c) => ({
+    room: c.room,
+    issue: c.issue,
+    moveInComment: c.moveInComment,
+    moveOutComment: c.moveOutComment,
+  }));
+
+  // Step 3: build itemized list in TypeScript (new items + auto-charges)
+  const newDamageList = buildNewDamageList(cards);
 
   return {
     property: moveIn.property || moveOut.property,
     tenantName: moveIn.tenantName || moveOut.tenantName,
     moveInDate: moveIn.date,
     moveOutDate: moveOut.date,
-    newDamage: comparison.newDamage.map(toMatchedItem),
-    preExisting: comparison.preExisting.map(toMatchedItem),
-    resolved: comparison.resolved.map(toMatchedItem),
+    cards,
+    newDamageList,
     itemCount: { moveIn: moveIn.items.length, moveOut: moveOut.items.length },
   };
 }
@@ -288,9 +315,7 @@ function extractOutputText(result: unknown): string | null {
   ) {
     return result.output_text;
   }
-
-  const output = (result as { output?: Array<{ content?: Array<unknown> }> })
-    .output;
+  const output = (result as { output?: Array<{ content?: Array<unknown> }> }).output;
   const textItem = output
     ?.flatMap((item) => item.content ?? [])
     .find(
@@ -302,7 +327,6 @@ function extractOutputText(result: unknown): string | null {
         "text" in content &&
         typeof content.text === "string",
     );
-
   return textItem?.text ?? null;
 }
 
