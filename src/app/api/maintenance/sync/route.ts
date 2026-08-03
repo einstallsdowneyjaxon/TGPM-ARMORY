@@ -105,26 +105,21 @@ async function syncTenantDirectory() {
 
   const supabase = getSupabaseClient();
 
-  // Actual columns from AppFolio tenant directory report:
-  // Unit, Tenant, Status, Tenant Type, Phone Numbers, Emails, Move-in,
-  // Lease To, Rent, Deposit, Tenant Tags, Tenant Address, Property ID,
-  // Lease From, Move-out, Tenant Notes, Occupancy ID, Unit ID, Tenant ID
-  //
+  // API returns lowercase snake_case: tenant, occupancy_id, tenant_address,
+  // move_in, move_out, property_id, unit_id, status, tenant_notes
+  // Dates are ISO format: "2024-11-01"
   // Name format: "LastName, FirstName" (e.g. "A. Boehm, Frederick")
 
   const upserts = rows
     .map((row) => {
-      const fullName = (row["Tenant"] ?? "").trim();
+      // Support both API (lowercase) and CSV (title case) column names
+      const fullName = (row["tenant"] ?? row["Tenant"] ?? "").trim();
       if (!fullName) return null;
 
-      const occupancyId = (row["Occupancy ID"] ?? "").trim();
+      const occupancyId = (
+        row["occupancy_id"] ?? row["Occupancy ID"] ?? ""
+      ).toString().trim();
       if (!occupancyId) return null;
-
-      const moveInRaw = row["Move-in"] ?? "";
-      let moveInDate: string | null = null;
-      if (moveInRaw?.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
-        try { moveInDate = new Date(moveInRaw).toISOString().split("T")[0]; } catch { /* skip */ }
-      }
 
       return {
         occupancy_id: occupancyId,
@@ -132,11 +127,14 @@ async function syncTenantDirectory() {
         normalized_name: normalizeName(fullName),
         first_name: null,
         last_name: null,
-        unit_address: (row["Tenant Address"] ?? "").trim() || null,
-        property_id: (row["Property ID"] ?? "").trim() || null,
-        unit_id: (row["Unit ID"] ?? "").trim() || null,
-        move_in_date: moveInDate,
-        status: (row["Status"] ?? "Current").trim(),
+        unit_address:
+          (row["tenant_address"] ?? row["Tenant Address"] ?? "").toString().trim() || null,
+        property_id:
+          (row["property_id"] ?? row["Property ID"] ?? "").toString().trim() || null,
+        unit_id:
+          (row["unit_id"] ?? row["Unit ID"] ?? "").toString().trim() || null,
+        move_in_date: parseDate(row["move_in"] ?? row["Move-in"] ?? null),
+        status: (row["status"] ?? row["Status"] ?? "Current").toString().trim(),
         synced_at: new Date().toISOString(),
       };
     })
