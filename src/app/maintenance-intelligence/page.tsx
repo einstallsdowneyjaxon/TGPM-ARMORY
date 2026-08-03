@@ -67,6 +67,7 @@ type DashboardData = {
   recurringIssues: RecurringIssue[];
   categoryTotals: CategoryTotal[];
   pmBreakdown: PmGroup[];
+  activeTenantsLoaded: boolean;
 };
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -244,7 +245,16 @@ export default function MaintenanceIntelligencePage() {
             {/* Tenant Watchlist */}
             {activeTab === "tenants" && (
               <SectionPanel title="Tenant Watchlist" count={filteredTenants.length}>
-                <div className="mb-4 flex flex-wrap gap-2">
+                {data.activeTenantsLoaded ? (
+                <p className="mb-3 text-xs text-emerald-700">
+                  ✓ Filtered to current tenants only — run Sync to refresh the tenant list
+                </p>
+              ) : (
+                <p className="mb-3 text-xs text-amber-700">
+                  Showing all tenants (past + current) — press Sync to load current tenant directory and filter to active only
+                </p>
+              )}
+              <div className="mb-4 flex flex-wrap gap-2">
                   {(["All", "Flag", "Watch"] as const).map((f) => (
                     <button
                       key={f}

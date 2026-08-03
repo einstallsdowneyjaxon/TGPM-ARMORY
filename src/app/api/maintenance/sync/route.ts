@@ -12,6 +12,9 @@ export const maxDuration = 300;
 const REPORT_UUID = process.env.APPFOLIO_WORK_ORDER_REPORT_UUID ??
   "992bd507-8ef4-11f1-a5fc-0e19822e78a7";
 
+const TENANT_DIRECTORY_UUID = process.env.APPFOLIO_TENANT_DIRECTORY_REPORT_UUID ??
+  "1f40875c-8f63-11f1-a5fc-0e19822e78a7";
+
 type AppFolioRow = Record<string, string | null>;
 
 // ─── AppFolio fetch ────────────────────────────────────────────────────────────
@@ -53,6 +56,84 @@ async function fetchAllRows(): Promise<AppFolioRow[]> {
   }
 
   return allRows;
+}
+
+async function fetchReportRows(reportUuid: string): Promise<AppFolioRow[]> {
+  const vhost = process.env.APPFOLIO_VHOST;
+  const clientId = process.env.APPFOLIO_CLIENT_ID;
+  const clientSecret = process.env.APPFOLIO_CLIENT_SECRET;
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const headers = { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" };
+
+  const allRows: AppFolioRow[] = [];
+  let url: string | null = `https://${vhost}/api/v2/reports/saved/${reportUuid}.json?limit=5000`;
+
+  while (url) {
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`AppFolio API error ${res.status} on report ${reportUuid}`);
+    const data = await res.json() as { results?: AppFolioRow[]; next_page_url?: string | null };
+    const rows = data.results ?? (Array.isArray(data) ? data as AppFolioRow[] : []);
+    allRows.push(...rows);
+    url = data.next_page_url ?? null;
+  }
+  return allRows;
+}
+
+// ─── Tenant directory sync ─────────────────────────────────────────────────────
+
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z\s]/g, "").trim().split(/\s+/).sort().join(" ");
+}
+
+async function syncTenantDirectory() {
+  const rows = await fetchReportRows(TENANT_DIRECTORY_UUID);
+  if (!rows.length) return 0;
+
+  const supabase = getSupabaseClient();
+
+  const upserts = rows
+    .map((row) => {
+      // Handle both "Last, First" and "First Last" and separate First/Last columns
+      const firstName = row["First Name"] ?? row["first_name"] ?? "";
+      const lastName = row["Last Name"] ?? row["last_name"] ?? "";
+      const tenantName = row["Tenant"] ?? row["tenant"] ?? row["Name"] ?? row["name"] ?? "";
+
+      let fullName = "";
+      if (firstName && lastName) {
+        fullName = `${lastName}, ${firstName}`.trim();
+      } else if (tenantName) {
+        fullName = tenantName.trim();
+      }
+
+      if (!fullName) return null;
+
+      return {
+        occupancy_id: row["Occupancy ID"] ?? row["occupancy_id"] ?? row["Tenant ID"] ?? row["tenant_id"] ?? fullName,
+        full_name: fullName,
+        normalized_name: normalizeName(fullName),
+        first_name: firstName || null,
+        last_name: lastName || null,
+        unit_address: row["Tenant Address"] ?? row["tenant_address"] ?? row["Unit Address"] ?? row["Property Address"] ?? null,
+        property_id: row["Property ID"] ?? row["property_id"] ?? null,
+        unit_id: row["Unit ID"] ?? row["unit_id"] ?? null,
+        move_in_date: (() => {
+          const d = row["Move-in"] ?? row["move_in"] ?? row["Move In"] ?? "";
+          if (d?.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
+            try { return new Date(d).toISOString().split("T")[0]; } catch { return null; }
+          }
+          return null;
+        })(),
+        status: row["Status"] ?? row["status"] ?? "Current",
+        synced_at: new Date().toISOString(),
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  // Clear old records and insert fresh (this is the current tenant snapshot)
+  await supabase.from("active_tenants").delete().neq("occupancy_id", "");
+  await supabase.from("active_tenants").upsert(upserts, { onConflict: "occupancy_id" });
+
+  return upserts.length;
 }
 
 // ─── Row mapping ───────────────────────────────────────────────────────────────
@@ -310,11 +391,16 @@ export async function POST(request: Request) {
 
     if (error) throw new Error(`Supabase upsert failed: ${error.message}`);
 
-    await Promise.all([refreshTenantSummaries(), refreshPropertySummaries()]);
+    const [, , tenantCount] = await Promise.all([
+      refreshTenantSummaries(),
+      refreshPropertySummaries(),
+      syncTenantDirectory(),
+    ]);
 
     return NextResponse.json({
       message: "Sync complete.",
       synced: mapped.length,
+      activeTenants: tenantCount,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

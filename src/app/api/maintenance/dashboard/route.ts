@@ -7,6 +7,20 @@ export async function GET() {
   try {
     const supabase = getSupabaseClient();
 
+    // Get active tenant names for filtering
+    const { data: activeTenantRows } = await supabase
+      .from("active_tenants")
+      .select("full_name, normalized_name");
+
+    const activeNames = new Set(
+      (activeTenantRows ?? []).flatMap((r) => [
+        (r.full_name as string | null)?.toLowerCase().trim() ?? "",
+        (r.normalized_name as string | null)?.toLowerCase().trim() ?? "",
+      ]).filter(Boolean),
+    );
+
+    const hasActiveTenants = activeNames.size > 0;
+
     const [
       { data: tenantWatchlist },
       { data: propertyWatchlist },
@@ -15,20 +29,20 @@ export async function GET() {
       { data: pmBreakdown },
       { data: recentActivity },
     ] = await Promise.all([
-      // Top tenants by WO count, flagged
+      // Tenants — filtered to active if tenant directory has been synced
       supabase
         .from("summary_tenant_maintenance")
         .select("requesting_resident, total_wo_count, controllable_billed, liability_flag, liability_score, liability_reasons, suggested_action, top_categories, last_wo_date")
         .gte("total_wo_count", 3)
         .order("total_wo_count", { ascending: false })
-        .limit(50),
+        .limit(500),
 
-      // Top properties by controllable billed
+      // Properties — no cap, sorted by controllable billed
       supabase
         .from("summary_property_work_orders")
         .select("unit_address, property_id, total_wo_count, total_billed, turn_billed, controllable_billed, recurring_issue_count, top_categories, top_tenants, last_wo_date")
-        .order("controllable_billed", { ascending: false })
-        .limit(50),
+        .order("controllable_billed", { ascending: false, nullsFirst: false })
+        .limit(500),
 
       // Recurring issues: properties with same category 3+ times
       supabase
@@ -77,14 +91,30 @@ export async function GET() {
       canceledCount: allWos.filter((r) => r.status === "Canceled").length,
     };
 
+    // Filter tenant list to active tenants only (when directory has been synced)
+    type TenantRow = { requesting_resident: string | null; [key: string]: unknown };
+    const filteredTenants = hasActiveTenants
+      ? (tenantWatchlist ?? []).filter((t) => {
+          const name = ((t as TenantRow).requesting_resident ?? "").toLowerCase().trim();
+          if (!name) return false;
+          if (activeNames.has(name)) return true;
+          // Also try "Lastname, Firstname" → "Firstname Lastname" normalization
+          const parts = name.split(",").map((p) => p.trim());
+          const flipped = parts.length === 2 ? `${parts[1]} ${parts[0]}` : name;
+          const sorted = name.split(/[\s,]+/).sort().join(" ");
+          return activeNames.has(flipped) || activeNames.has(sorted);
+        })
+      : (tenantWatchlist ?? []);
+
     return NextResponse.json({
       portfolioTotals,
-      tenantWatchlist: tenantWatchlist ?? [],
+      tenantWatchlist: filteredTenants,
       propertyWatchlist: propertyWatchlist ?? [],
       recurringIssues: recurring,
       categoryTotals: categories,
       pmBreakdown: pmMap,
       recentActivity: recentActivity ?? [],
+      activeTenantsLoaded: hasActiveTenants,
     });
   } catch (err) {
     return NextResponse.json(
