@@ -44,17 +44,19 @@ export async function GET() {
         .order("controllable_billed", { ascending: false, nullsFirst: false })
         .limit(500),
 
-      // Recurring issues: properties with same category 3+ times
+      // Recurring issues
       supabase
         .from("work_orders")
         .select("unit_address, job_category, status")
         .neq("job_category", "Unit Turn")
-        .not("unit_address", "is", null),
+        .not("unit_address", "is", null)
+        .limit(20000),
 
-      // Category breakdown totals
+      // Category breakdown totals — limit raised to cover full dataset
       supabase
         .from("work_orders")
-        .select("job_category, billed_amount, is_turn, is_capital, status"),
+        .select("job_category, billed_amount, is_turn, is_capital, status")
+        .limit(20000),
 
       // PM group breakdown via property_pm_assignments join
       supabase

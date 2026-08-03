@@ -398,8 +398,10 @@ export async function POST(request: Request) {
 
     if (error) throw new Error(`Supabase upsert failed: ${error.message}`);
 
-    // Rebuild summaries via SQL function (runs on DB, fast)
-    await refreshSummaries();
+    // Only rebuild summaries when new work orders were upserted
+    if (mapped.length > 0) {
+      await refreshSummaries();
+    }
 
     // Sync tenant directory separately — errors here don't fail the whole sync
     let tenantCount = 0;
@@ -411,7 +413,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      message: "Sync complete.",
+      message: mapped.length > 0 ? "Sync complete — summaries rebuilt." : "No new work orders. Tenant directory refreshed.",
       synced: mapped.length,
       activeTenants: tenantCount,
       tenantDirectoryError: tenantError || undefined,
