@@ -154,9 +154,15 @@ async function syncTenantDirectory() {
 function parseDate(val: string | null | undefined): string | null {
   if (!val?.trim()) return null;
   try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return null;
-    return d.toISOString().split("T")[0];
+    // API returns ISO dates like "2026-08-03" — use directly
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val.trim())) return val.trim();
+    // CSV exports use "MM/DD/YYYY" format
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(val.trim())) {
+      const d = new Date(val.trim());
+      if (isNaN(d.getTime())) return null;
+      return d.toISOString().split("T")[0];
+    }
+    return null;
   } catch {
     return null;
   }
@@ -169,52 +175,58 @@ function parseAmount(val: string | null | undefined): number | null {
 }
 
 function mapRow(row: AppFolioRow) {
-  // The report builder combines WO + billable reports.
-  // Duplicate column names (Vendor, Created Date) — first occurrence = WO, second = billing.
-  const keys = Object.keys(row);
-  const vendorKeys = keys.filter((k) => k === "Vendor" || k === "vendor");
-  const createdDateKeys = keys.filter((k) => k === "Created Date" || k === "created_date");
-
-  const woVendor = vendorKeys[0] ? row[vendorKeys[0]] : null;
-  const billingVendor = vendorKeys[1] ? row[vendorKeys[1]] : null;
-  const billingCreatedDate = createdDateKeys[0] ? row[createdDateKeys[0]] : null;
-
-  const jobDescription = row["Job Description"] ?? row["job_description"] ?? "";
-  const billedAmount = parseAmount(row["Billed Amount"] ?? row["billed_amount"]) ?? 0;
+  // API returns camelCase keys — different from CSV export headers.
+  // e.g. "WorkOrderNumber" not "Work Order Number", "RequestingTenant" not "Requesting Resident"
+  const jobDescription =
+    row["JobDescription"] ?? row["Job Description"] ?? row["job_description"] ?? "";
+  const billedAmount =
+    parseAmount(row["BilledAmount"] ?? row["Billed Amount"] ?? row["billed_amount"]) ?? 0;
   const jobCategory = normalizeJobCategory(jobDescription);
   const { isTurn, isCapital } = classifyWorkOrder(jobDescription, jobCategory, billedAmount);
 
   return {
-    work_order_number: row["Work Order Number"] ?? row["work_order_number"] ?? "",
-    unit_address: row["Unit Address"] ?? row["unit_address"] ?? null,
-    property_id: row["Property ID"] ?? row["property_id"] ?? null,
-    unit_id: row["Unit ID"] ?? row["unit_id"] ?? null,
+    work_order_number:
+      row["WorkOrderNumber"] ?? row["Work Order Number"] ?? row["work_order_number"] ?? "",
+    unit_address:
+      row["UnitAddress"] ?? row["Unit Address"] ?? row["unit_address"] ?? null,
+    property_id:
+      (row["PropertyId"] ?? row["Property ID"] ?? row["property_id"] ?? null)?.toString() ?? null,
+    unit_id:
+      (row["unit_id"] ?? row["Unit ID"] ?? null)?.toString() ?? null,
     job_description: jobDescription || null,
-    service_request_description: row["Service Request Description"] ?? row["service_request_description"] ?? null,
+    service_request_description:
+      row["ServiceRequestDescription"] ?? row["Service Request Description"] ?? null,
     instructions: row["Instructions"] ?? row["instructions"] ?? null,
     completion_description: row["Description"] ?? row["description"] ?? null,
-    work_order_type: row["Work Order Type"] ?? row["work_order_type"] ?? null,
+    work_order_type:
+      row["WorkOrderType"] ?? row["Work Order Type"] ?? row["work_order_type"] ?? null,
     priority: row["Priority"] ?? row["priority"] ?? null,
-    wo_vendor: woVendor ?? null,
-    wo_vendor_id: row["Vendor ID"] ?? row["vendor_id"] ?? null,
-    created_at_af: parseDate(row["Created At"] ?? row["created_at"]),
-    created_by: row["Created By"] ?? row["created_by"] ?? null,
-    assigned_user: row["Assigned User"] ?? row["assigned_user"] ?? null,
-    work_done_on: parseDate(row["Work Done On"] ?? row["work_done_on"]),
-    completed_on: parseDate(row["Completed On"] ?? row["completed_on"]),
-    canceled_on: parseDate(row["Canceled On"] ?? row["canceled_on"]),
+    wo_vendor: row["Vendor"] ?? row["vendor"] ?? null,
+    wo_vendor_id: row["vendor_id"] ?? row["Vendor ID"] ?? null,
+    created_at_af: parseDate(row["CreatedAt"] ?? row["Created At"] ?? row["created_at"]),
+    created_by: row["CreatedBy"] ?? row["Created By"] ?? row["created_by"] ?? null,
+    assigned_user: row["AssignedUser"] ?? row["Assigned User"] ?? row["assigned_user"] ?? null,
+    work_done_on: parseDate(row["WorkCompletedOn"] ?? row["Work Done On"] ?? row["work_done_on"]),
+    completed_on: parseDate(row["CompletedOn"] ?? row["Completed On"] ?? row["completed_on"]),
+    canceled_on: parseDate(row["CanceledOn"] ?? row["Canceled On"] ?? row["canceled_on"]),
     invoice: row["Invoice"] ?? row["invoice"] ?? null,
     status: row["Status"] ?? row["status"] ?? null,
-    tenant_total_charge: parseAmount(row["Tenant Total Charge Amount"] ?? row["tenant_total_charge_amount"]),
-    resident_requested: (row["Resident Requested"] ?? row["resident_requested"])?.trim()?.toLowerCase() === "yes",
-    requesting_resident: row["Requesting Resident"] ?? row["requesting_resident"] ?? null,
-    occupancy_id: row["Occupancy ID"] ?? row["occupancy_id"] ?? null,
-    billing_vendor: billingVendor ?? null,
-    billing_created_date: parseDate(billingCreatedDate),
-    billable_type: row["Billable Type"] ?? row["billable_type"] ?? null,
-    gl_account: row["GL Account"] ?? row["gl_account"] ?? null,
+    tenant_total_charge: parseAmount(
+      row["TenantTotalChargeAmount"] ?? row["Tenant Total Charge Amount"] ?? null,
+    ),
+    resident_requested:
+      (row["SubmittedByTenant"] ?? row["Resident Requested"] ?? row["resident_requested"] ?? "")
+        .trim()
+        .toLowerCase() === "yes",
+    requesting_resident:
+      row["RequestingTenant"] ?? row["Requesting Resident"] ?? row["requesting_resident"] ?? null,
+    occupancy_id: (row["occupancy_id"] ?? row["Occupancy ID"] ?? null)?.toString() ?? null,
+    billing_vendor: null, // JSON deduplicates Vendor key — not reliably extractable
+    billing_created_date: parseDate(row["CreatedDate"] ?? row["Created Date"] ?? null),
+    billable_type: row["BillableType"] ?? row["Billable Type"] ?? row["billable_type"] ?? null,
+    gl_account: row["GLAccount"] ?? row["GL Account"] ?? row["gl_account"] ?? null,
     billed_amount: billedAmount || null,
-    appfolio_work_order_id: row["Work Order ID"] ?? row["work_order_id"] ?? null,
+    appfolio_work_order_id: row["work_order_id"] ?? row["Work Order ID"] ?? null,
     job_category: jobCategory,
     is_turn: isTurn,
     is_capital: isCapital,
