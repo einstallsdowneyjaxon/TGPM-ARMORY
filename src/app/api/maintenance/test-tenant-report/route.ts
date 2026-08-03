@@ -10,12 +10,26 @@ export async function GET() {
     const clientId = process.env.APPFOLIO_CLIENT_ID;
     const clientSecret = process.env.APPFOLIO_CLIENT_SECRET;
 
+    // Diagnostic — show exactly what we have (masked)
+    const diagnostics = {
+      vhost_set: !!vhost,
+      vhost_value: vhost ? `"${vhost.slice(0, 30)}..." (len=${vhost.length})` : "MISSING",
+      vhost_has_protocol: vhost?.startsWith("http"),
+      vhost_trimmed_differs: vhost !== vhost?.trim(),
+      clientId_set: !!clientId,
+      clientSecret_set: !!clientSecret,
+      constructed_url: vhost
+        ? `https://${vhost.trim()}/api/v2/reports/saved/${TENANT_DIRECTORY_UUID}.json?limit=5`
+        : "CANNOT_BUILD_URL",
+    };
+
     if (!vhost || !clientId || !clientSecret) {
-      return NextResponse.json({ error: "Missing AppFolio credentials." }, { status: 503 });
+      return NextResponse.json({ error: "Missing credentials", diagnostics });
     }
 
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-    const url = `https://${vhost}/api/v2/reports/saved/${TENANT_DIRECTORY_UUID}.json?limit=5`;
+    const cleanVhost = vhost.trim().replace(/^https?:\/\//, "");
+    const url = `https://${cleanVhost}/api/v2/reports/saved/${TENANT_DIRECTORY_UUID}.json?limit=5`;
+    const credentials = Buffer.from(`${clientId.trim()}:${clientSecret.trim()}`).toString("base64");
 
     const res = await fetch(url, {
       headers: {
@@ -29,7 +43,8 @@ export async function GET() {
     if (!res.ok) {
       return NextResponse.json({
         error: `AppFolio returned ${res.status}`,
-        body: body.slice(0, 500),
+        body: body.slice(0, 300),
+        diagnostics,
       }, { status: 502 });
     }
 
@@ -37,17 +52,17 @@ export async function GET() {
     const rows = (data as { results?: Record<string, unknown>[] }).results
       ?? (Array.isArray(data) ? data as Record<string, unknown>[] : []);
 
-    const columns = rows[0] ? Object.keys(rows[0]) : [];
-
     return NextResponse.json({
       status: res.status,
       rowCount: rows.length,
-      columns,
+      columns: rows[0] ? Object.keys(rows[0]) : [],
       sampleRow: rows[0] ?? null,
+      diagnostics,
     });
   } catch (err) {
     return NextResponse.json({
       error: err instanceof Error ? err.message : "Unexpected error.",
+      stack: err instanceof Error ? err.stack?.slice(0, 500) : undefined,
     }, { status: 500 });
   }
 }

@@ -28,7 +28,9 @@ async function fetchAllRows(): Promise<AppFolioRow[]> {
     throw new Error("Missing APPFOLIO_VHOST, APPFOLIO_CLIENT_ID, or APPFOLIO_CLIENT_SECRET.");
   }
 
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  // Strip any accidental protocol prefix or whitespace from vhost
+  const cleanVhost = vhost.trim().replace(/^https?:\/\//, "");
+  const credentials = Buffer.from(`${clientId.trim()}:${clientSecret.trim()}`).toString("base64");
   const headers = {
     Authorization: `Basic ${credentials}`,
     "Content-Type": "application/json",
@@ -36,7 +38,7 @@ async function fetchAllRows(): Promise<AppFolioRow[]> {
 
   const allRows: AppFolioRow[] = [];
   let url: string | null =
-    `https://${vhost}/api/v2/reports/saved/${REPORT_UUID}.json?limit=5000`;
+    `https://${cleanVhost}/api/v2/reports/saved/${REPORT_UUID}.json?limit=5000`;
 
   while (url) {
     const res = await fetch(url, { headers });
@@ -62,11 +64,12 @@ async function fetchReportRows(reportUuid: string): Promise<AppFolioRow[]> {
   const vhost = process.env.APPFOLIO_VHOST;
   const clientId = process.env.APPFOLIO_CLIENT_ID;
   const clientSecret = process.env.APPFOLIO_CLIENT_SECRET;
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const cleanVhost2 = (vhost ?? "").trim().replace(/^https?:\/\//, "");
+  const credentials = Buffer.from(`${(clientId ?? "").trim()}:${(clientSecret ?? "").trim()}`).toString("base64");
   const headers = { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" };
 
   const allRows: AppFolioRow[] = [];
-  let url: string | null = `https://${vhost}/api/v2/reports/saved/${reportUuid}.json?limit=5000`;
+  let url: string | null = `https://${cleanVhost2}/api/v2/reports/saved/${reportUuid}.json?limit=5000`;
 
   while (url) {
     const res = await fetch(url, { headers });
