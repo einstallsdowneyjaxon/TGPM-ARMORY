@@ -209,7 +209,15 @@ function mapRow(row: AppFolioRow) {
   };
 }
 
-// ─── Summary refresh ──────────────────────────────────────────────────────────
+// ─── Summary refresh (runs as SQL on the database — fast) ─────────────────────
+
+async function refreshSummaries() {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("refresh_maintenance_summaries");
+  if (error) throw new Error(`Summary refresh failed: ${error.message}`);
+}
+
+// ─── Legacy JS summary functions (kept for reference, replaced by SQL above) ──
 
 async function refreshTenantSummaries() {
   const supabase = getSupabaseClient();
@@ -391,16 +399,23 @@ export async function POST(request: Request) {
 
     if (error) throw new Error(`Supabase upsert failed: ${error.message}`);
 
-    const [, , tenantCount] = await Promise.all([
-      refreshTenantSummaries(),
-      refreshPropertySummaries(),
-      syncTenantDirectory(),
-    ]);
+    // Rebuild summaries via SQL function (runs on DB, fast)
+    await refreshSummaries();
+
+    // Sync tenant directory separately — errors here don't fail the whole sync
+    let tenantCount = 0;
+    let tenantError = "";
+    try {
+      tenantCount = await syncTenantDirectory();
+    } catch (err) {
+      tenantError = err instanceof Error ? err.message : "Tenant directory sync failed.";
+    }
 
     return NextResponse.json({
       message: "Sync complete.",
       synced: mapped.length,
       activeTenants: tenantCount,
+      tenantDirectoryError: tenantError || undefined,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
