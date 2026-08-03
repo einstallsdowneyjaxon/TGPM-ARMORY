@@ -151,4 +151,11 @@ export const tools: ToolLink[] = [
     category: "Operations",
     url: "/move-out-inspector",
   },
+  {
+    name: "Maintenance Intelligence",
+    description:
+      "Tenant maintenance watchlist, property burden analysis, recurring issues, and PM group breakdown — powered by live AppFolio work orders.",
+    category: "Maintenance",
+    url: "/maintenance-intelligence",
+  },
 ];
