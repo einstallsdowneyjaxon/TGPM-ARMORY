@@ -84,13 +84,16 @@ export async function GET() {
 
     // Build PM → properties map
     const pmMap = buildPmMap((pmBreakdown ?? []) as unknown as PmRow[], (propertyWatchlist ?? []) as PropRow[]);
+    // Portfolio totals via SQL to bypass Supabase 1000-row REST cap
+    const { data: statsRow } = await supabase.rpc("get_portfolio_maintenance_stats");
+    const stats = (statsRow as Record<string, number> | null) ?? {};
     const portfolioTotals = {
-      totalWoCount: allWos.length,
-      totalBilled: allWos.reduce((s, r) => s + (Number(r.billed_amount) || 0), 0),
-      turnBilled: allWos.filter((r) => r.is_turn).reduce((s, r) => s + (Number(r.billed_amount) || 0), 0),
-      controllableBilled: allWos.filter((r) => !r.is_turn && !r.is_capital).reduce((s, r) => s + (Number(r.billed_amount) || 0), 0),
-      completedCount: allWos.filter((r) => r.status === "Completed").length,
-      canceledCount: allWos.filter((r) => r.status === "Canceled").length,
+      totalWoCount: Number(stats.total_wo_count ?? allWos.length),
+      totalBilled: Number(stats.total_billed ?? allWos.reduce((s, r) => s + (Number(r.billed_amount) || 0), 0)),
+      turnBilled: Number(stats.turn_billed ?? 0),
+      controllableBilled: Number(stats.controllable_billed ?? 0),
+      completedCount: Number(stats.completed_count ?? allWos.filter((r) => r.status === "Completed").length),
+      canceledCount: Number(stats.canceled_count ?? allWos.filter((r) => r.status === "Canceled").length),
     };
 
     // Filter tenant list to active tenants only (when directory has been synced)
