@@ -91,39 +91,38 @@ async function syncTenantDirectory() {
 
   const supabase = getSupabaseClient();
 
+  // Actual columns from AppFolio tenant directory report:
+  // Unit, Tenant, Status, Tenant Type, Phone Numbers, Emails, Move-in,
+  // Lease To, Rent, Deposit, Tenant Tags, Tenant Address, Property ID,
+  // Lease From, Move-out, Tenant Notes, Occupancy ID, Unit ID, Tenant ID
+  //
+  // Name format: "LastName, FirstName" (e.g. "A. Boehm, Frederick")
+
   const upserts = rows
     .map((row) => {
-      // Handle both "Last, First" and "First Last" and separate First/Last columns
-      const firstName = row["First Name"] ?? row["first_name"] ?? "";
-      const lastName = row["Last Name"] ?? row["last_name"] ?? "";
-      const tenantName = row["Tenant"] ?? row["tenant"] ?? row["Name"] ?? row["name"] ?? "";
-
-      let fullName = "";
-      if (firstName && lastName) {
-        fullName = `${lastName}, ${firstName}`.trim();
-      } else if (tenantName) {
-        fullName = tenantName.trim();
-      }
-
+      const fullName = (row["Tenant"] ?? "").trim();
       if (!fullName) return null;
 
+      const occupancyId = (row["Occupancy ID"] ?? "").trim();
+      if (!occupancyId) return null;
+
+      const moveInRaw = row["Move-in"] ?? "";
+      let moveInDate: string | null = null;
+      if (moveInRaw?.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
+        try { moveInDate = new Date(moveInRaw).toISOString().split("T")[0]; } catch { /* skip */ }
+      }
+
       return {
-        occupancy_id: row["Occupancy ID"] ?? row["occupancy_id"] ?? row["Tenant ID"] ?? row["tenant_id"] ?? fullName,
+        occupancy_id: occupancyId,
         full_name: fullName,
         normalized_name: normalizeName(fullName),
-        first_name: firstName || null,
-        last_name: lastName || null,
-        unit_address: row["Tenant Address"] ?? row["tenant_address"] ?? row["Unit Address"] ?? row["Property Address"] ?? null,
-        property_id: row["Property ID"] ?? row["property_id"] ?? null,
-        unit_id: row["Unit ID"] ?? row["unit_id"] ?? null,
-        move_in_date: (() => {
-          const d = row["Move-in"] ?? row["move_in"] ?? row["Move In"] ?? "";
-          if (d?.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
-            try { return new Date(d).toISOString().split("T")[0]; } catch { return null; }
-          }
-          return null;
-        })(),
-        status: row["Status"] ?? row["status"] ?? "Current",
+        first_name: null,
+        last_name: null,
+        unit_address: (row["Tenant Address"] ?? "").trim() || null,
+        property_id: (row["Property ID"] ?? "").trim() || null,
+        unit_id: (row["Unit ID"] ?? "").trim() || null,
+        move_in_date: moveInDate,
+        status: (row["Status"] ?? "Current").trim(),
         synced_at: new Date().toISOString(),
       };
     })
