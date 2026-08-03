@@ -140,9 +140,17 @@ async function syncTenantDirectory() {
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
-  // Clear old records and insert fresh (this is the current tenant snapshot)
-  await supabase.from("active_tenants").delete().neq("occupancy_id", "");
-  await supabase.from("active_tenants").upsert(upserts, { onConflict: "occupancy_id" });
+  // Clear old records and insert fresh in batches of 200
+  await supabase.from("active_tenants").delete().neq("occupancy_id", "____none____");
+
+  const BATCH = 200;
+  for (let i = 0; i < upserts.length; i += BATCH) {
+    const batch = upserts.slice(i, i + BATCH);
+    const { error } = await supabase
+      .from("active_tenants")
+      .upsert(batch, { onConflict: "occupancy_id" });
+    if (error) throw new Error(`active_tenants upsert failed (batch ${i}): ${error.message}`);
+  }
 
   return upserts.length;
 }
