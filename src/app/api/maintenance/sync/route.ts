@@ -54,7 +54,13 @@ async function fetchAllRows(): Promise<AppFolioRow[]> {
 
     const rows = data.results ?? (Array.isArray(data) ? data as AppFolioRow[] : []);
     allRows.push(...rows);
-    url = data.next_page_url ?? null;
+    const nextUrl = data.next_page_url ?? null;
+    // AppFolio sometimes returns a relative next_page_url — make it absolute
+    if (nextUrl && nextUrl.startsWith("/")) {
+      url = `https://${cleanVhost}${nextUrl}`;
+    } else {
+      url = nextUrl;
+    }
   }
 
   return allRows;
@@ -77,7 +83,12 @@ async function fetchReportRows(reportUuid: string): Promise<AppFolioRow[]> {
     const data = await res.json() as { results?: AppFolioRow[]; next_page_url?: string | null };
     const rows = data.results ?? (Array.isArray(data) ? data as AppFolioRow[] : []);
     allRows.push(...rows);
-    url = data.next_page_url ?? null;
+    const nextUrl2 = data.next_page_url ?? null;
+    if (nextUrl2 && nextUrl2.startsWith("/")) {
+      url = `https://${cleanVhost2}${nextUrl2}`;
+    } else {
+      url = nextUrl2;
+    }
   }
   return allRows;
 }
