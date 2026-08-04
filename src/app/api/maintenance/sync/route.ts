@@ -140,19 +140,22 @@ async function syncTenantDirectory() {
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
+  // Deduplicate by occupancy_id — report can have co-signers/roommates sharing same ID
+  const deduped = [...new Map(upserts.map((u) => [u.occupancy_id, u])).values()];
+
   // Clear old records and insert fresh in batches of 200
   await supabase.from("active_tenants").delete().neq("occupancy_id", "____none____");
 
   const BATCH = 200;
-  for (let i = 0; i < upserts.length; i += BATCH) {
-    const batch = upserts.slice(i, i + BATCH);
+  for (let i = 0; i < deduped.length; i += BATCH) {
+    const batch = deduped.slice(i, i + BATCH);
     const { error } = await supabase
       .from("active_tenants")
       .upsert(batch, { onConflict: "occupancy_id" });
     if (error) throw new Error(`active_tenants upsert failed (batch ${i}): ${error.message}`);
   }
 
-  return upserts.length;
+  return deduped.length;
 }
 
 // ─── Row mapping ───────────────────────────────────────────────────────────────
