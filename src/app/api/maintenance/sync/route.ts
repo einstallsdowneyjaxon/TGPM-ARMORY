@@ -477,13 +477,32 @@ async function runSync(options: SyncOptions = {}) {
         ? "No work orders in report window. Tenant directory refreshed."
         : "No work orders in report window.";
 
+  const timestamp = new Date().toISOString();
+  const scope = includeTenants ? "full" : "work_orders";
+
+  // Stamp so open dashboards can detect completed pulls and auto-refresh
+  const { error: stampError } = await supabase.from("maintenance_sync_state").upsert(
+    {
+      id: "default",
+      last_synced_at: timestamp,
+      last_synced_count: mapped.length,
+      last_sync_scope: scope,
+      updated_at: timestamp,
+    },
+    { onConflict: "id" },
+  );
+  if (stampError) {
+    console.error("Failed to stamp maintenance_sync_state:", stampError.message);
+  }
+
   return {
     message,
     synced: mapped.length,
     activeTenants: tenantCount,
     tenantDirectoryError: tenantError || undefined,
     includeTenants,
-    timestamp: new Date().toISOString(),
+    lastSyncedAt: timestamp,
+    timestamp,
   };
 }
 

@@ -19,3 +19,4 @@ Non-obvious notes:
 - Empty AppFolio "Today" WO report is OK (returns synced: 0). Daily/full sync still refreshes the tenant directory. Hourly WO-only: `GET/POST /api/maintenance/sync?scope=work_orders`.
 - Account is on **Vercel Hobby**, which only allows one cron fire per day — keep the overnight job in `vercel.json`. For business-hours hourly pulls, use an external scheduler against `?scope=work_orders` (Hobby cannot host hourly Vercel Cron).
 - "Today's Work Orders" uses America/New_York calendar date vs `work_orders.created_at_af`. Expand loads `/api/maintenance/history` by `occupancy_id` (index `idx_work_orders_occupancy_id`).
+- Open dashboard tabs auto-refresh after a completed sync: sync stamps `maintenance_sync_state.last_synced_at`; the page polls `/api/maintenance/sync-status` ~every 60s and reloads when the stamp changes (does not call AppFolio).

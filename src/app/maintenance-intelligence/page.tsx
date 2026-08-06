@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,6 +97,9 @@ type DashboardData = {
   todayWorkOrders: TodayWo[];
   todayDate: string;
   activeTenantsLoaded: boolean;
+  lastSyncedAt: string | null;
+  lastSyncedCount?: number | null;
+  lastSyncScope?: string | null;
 };
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -114,6 +117,21 @@ function formatShortDate(iso: string | null): string {
   const [y, m, d] = iso.slice(0, 10).split("-");
   if (!y || !m || !d) return iso;
   return `${Number(m)}/${Number(d)}/${y.slice(2)}`;
+}
+
+function formatSyncedAt(iso: string | null): string {
+  if (!iso) return "Not synced yet";
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -288,28 +306,36 @@ function TodayWorkOrderCard({ wo }: { wo: TodayWo }) {
 
 type ActiveTab = "tenants" | "properties" | "recurring" | "categories" | "pm";
 
+const SYNC_POLL_MS = 60_000;
+
 export default function MaintenanceIntelligencePage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState("");
+  const [autoRefreshNote, setAutoRefreshNote] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("tenants");
   const [flagFilter, setFlagFilter] = useState<"All" | "Flag" | "Watch">("All");
   const [watchlistOpen, setWatchlistOpen] = useState(false);
 
-  const loadDashboard = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadDashboard = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const res = await fetch("/api/maintenance/dashboard");
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to load dashboard.");
       setData(payload as DashboardData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error.");
+      if (!silent) {
+        setError(err instanceof Error ? err.message : "Unexpected error.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -319,15 +345,68 @@ export default function MaintenanceIntelligencePage() {
     return () => clearTimeout(t);
   }, [loadDashboard]);
 
+  const knownSyncStampRef = useRef<string | null>(null);
+
+  // Keep ref aligned when dashboard itself reports a stamp (initial load / Sync button)
+  useEffect(() => {
+    if (data?.lastSyncedAt) {
+      knownSyncStampRef.current = data.lastSyncedAt;
+    }
+  }, [data?.lastSyncedAt]);
+
+  // Poll sync stamp; when hourly/daily sync finishes, refresh open tabs from Supabase
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkSyncStamp() {
+      try {
+        const res = await fetch("/api/maintenance/sync-status");
+        if (!res.ok) return;
+        const payload = await res.json() as { lastSyncedAt?: string | null };
+        const next = payload.lastSyncedAt ?? null;
+        if (!next) return;
+        const known = knownSyncStampRef.current;
+        if (known == null) {
+          knownSyncStampRef.current = next;
+          return;
+        }
+        if (next !== known) {
+          knownSyncStampRef.current = next;
+          if (!cancelled) {
+            setAutoRefreshNote("Board updated from latest AppFolio pull.");
+            await loadDashboard({ silent: true });
+          }
+        }
+      } catch {
+        // Ignore transient poll errors — next tick will retry
+      }
+    }
+
+    const interval = setInterval(() => { void checkSyncStamp(); }, SYNC_POLL_MS);
+    const first = setTimeout(() => { void checkSyncStamp(); }, 5_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      clearTimeout(first);
+    };
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    if (!autoRefreshNote) return;
+    const t = setTimeout(() => setAutoRefreshNote(""), 8_000);
+    return () => clearTimeout(t);
+  }, [autoRefreshNote]);
+
   async function triggerSync() {
     setSyncing(true);
     setSyncResult("");
+    setAutoRefreshNote("");
     try {
       const res = await fetch("/api/maintenance/sync", { method: "POST" });
       const payload = await res.json() as { message?: string; synced?: number; error?: string };
       if (!res.ok) throw new Error(payload.error ?? "Sync failed.");
       setSyncResult(`✓ ${payload.message} ${payload.synced ?? 0} records.`);
-      await loadDashboard();
+      await loadDashboard({ silent: true });
     } catch (err) {
       setSyncResult(`✗ ${err instanceof Error ? err.message : "Sync failed."}`);
     } finally {
@@ -368,20 +447,29 @@ export default function MaintenanceIntelligencePage() {
                 Review today&apos;s work orders with occupancy history before dispatch — plus tenant watchlist, property burden, and PM breakdown.
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              {syncResult ? (
-                <p className={`text-sm font-medium ${syncResult.startsWith("✓") ? "text-emerald-700" : "text-red-700"}`}>
-                  {syncResult}
-                </p>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void triggerSync()}
-                disabled={syncing}
-                className="h-11 rounded-lg bg-[#f05a28] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#d94d20] disabled:opacity-50"
-              >
-                {syncing ? "Syncing…" : "Sync from AppFolio"}
-              </button>
+            <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                {syncResult ? (
+                  <p className={`text-sm font-medium ${syncResult.startsWith("✓") ? "text-emerald-700" : "text-red-700"}`}>
+                    {syncResult}
+                  </p>
+                ) : null}
+                {autoRefreshNote ? (
+                  <p className="text-sm font-medium text-emerald-700">{autoRefreshNote}</p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void triggerSync()}
+                  disabled={syncing}
+                  className="h-11 rounded-lg bg-[#f05a28] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#d94d20] disabled:opacity-50"
+                >
+                  {syncing ? "Syncing…" : "Sync from AppFolio"}
+                </button>
+              </div>
+              <p className="text-xs text-[#667085]">
+                Last AppFolio pull: {formatSyncedAt(data?.lastSyncedAt ?? null)}
+                {" · "}Board auto-refreshes after each pull
+              </p>
             </div>
           </div>
         </header>

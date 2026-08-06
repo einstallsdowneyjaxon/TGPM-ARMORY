@@ -171,6 +171,12 @@ export async function GET() {
       history_count: r.occupancy_id ? (historyByOcc.get(r.occupancy_id) ?? 0) : 0,
     }));
 
+    const { data: syncState } = await supabase
+      .from("maintenance_sync_state")
+      .select("last_synced_at, last_synced_count, last_sync_scope")
+      .eq("id", "default")
+      .maybeSingle();
+
     return NextResponse.json({
       portfolioTotals,
       tenantWatchlist: filteredTenants,
@@ -182,6 +188,9 @@ export async function GET() {
       todayWorkOrders,
       todayDate: today,
       activeTenantsLoaded: hasActiveTenants,
+      lastSyncedAt: (syncState?.last_synced_at as string | null) ?? null,
+      lastSyncedCount: syncState?.last_synced_count ?? null,
+      lastSyncScope: syncState?.last_sync_scope ?? null,
     });
   } catch (err) {
     return NextResponse.json(
