@@ -406,54 +406,95 @@ async function refreshPropertySummaries() {
   });
 }
 
-// ─── Route handler ─────────────────────────────────────────────────────────────
+// ─── Route handlers ────────────────────────────────────────────────────────────
 
-export async function POST(request: Request) {
-  try {
-    // Simple bearer token check to prevent unauthorized triggers
-    const auth = request.headers.get("authorization");
-    const secret = process.env.CRON_SECRET;
-    if (secret && auth !== `Bearer ${secret}`) {
+type SyncOptions = {
+  /** When false, skip tenant directory (hourly WO-only pulls). Default true. */
+  includeTenants?: boolean;
+};
+
+function parseIncludeTenants(url: URL): boolean {
+  const scope = url.searchParams.get("scope");
+  if (scope === "work_orders" || scope === "wo") return false;
+  const include = url.searchParams.get("include_tenants");
+  if (include === "0" || include === "false") return false;
+  return true;
+}
+
+/**
+ * Auth rules:
+ * - Vercel Cron calls GET with Authorization: Bearer CRON_SECRET
+ * - Dashboard Sync button calls POST with no Authorization header
+ * - If CRON_SECRET is set and the request includes Authorization (or is GET), require a match
+ */
+function authorize(request: Request): NextResponse | null {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return null;
+
+  const auth = request.headers.get("authorization");
+  const isGet = request.method === "GET";
+  if (isGet || auth) {
+    if (auth !== `Bearer ${secret}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+  }
+  return null;
+}
 
-    const rows = await fetchAllRows();
-    if (!rows.length) {
-      return NextResponse.json({ message: "No rows returned from AppFolio.", synced: 0 });
-    }
+async function runSync(options: SyncOptions = {}) {
+  const includeTenants = options.includeTenants !== false;
 
-    const mapped = rows
-      .map(mapRow)
-      .filter((r) => r.work_order_number?.trim());
+  const rows = await fetchAllRows();
+  const mapped = rows
+    .map(mapRow)
+    .filter((r) => r.work_order_number?.trim());
 
-    const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient();
+
+  // Empty "Today" report is OK — still refresh tenants on daily/full sync
+  if (mapped.length > 0) {
     const { error } = await supabase
       .from("work_orders")
       .upsert(mapped, { onConflict: "work_order_number" });
-
     if (error) throw new Error(`Supabase upsert failed: ${error.message}`);
+    await refreshSummaries();
+  }
 
-    // Only rebuild summaries when new work orders were upserted
-    if (mapped.length > 0) {
-      await refreshSummaries();
-    }
-
-    // Sync tenant directory separately — errors here don't fail the whole sync
-    let tenantCount = 0;
-    let tenantError = "";
+  let tenantCount = 0;
+  let tenantError = "";
+  if (includeTenants) {
     try {
       tenantCount = await syncTenantDirectory();
     } catch (err) {
       tenantError = err instanceof Error ? err.message : "Tenant directory sync failed.";
     }
+  }
 
-    return NextResponse.json({
-      message: mapped.length > 0 ? "Sync complete — summaries rebuilt." : "No new work orders. Tenant directory refreshed.",
-      synced: mapped.length,
-      activeTenants: tenantCount,
-      tenantDirectoryError: tenantError || undefined,
-      timestamp: new Date().toISOString(),
-    });
+  const message =
+    mapped.length > 0
+      ? "Sync complete — summaries rebuilt."
+      : includeTenants
+        ? "No work orders in report window. Tenant directory refreshed."
+        : "No work orders in report window.";
+
+  return {
+    message,
+    synced: mapped.length,
+    activeTenants: tenantCount,
+    tenantDirectoryError: tenantError || undefined,
+    includeTenants,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+export async function POST(request: Request) {
+  const denied = authorize(request);
+  if (denied) return denied;
+
+  try {
+    const url = new URL(request.url);
+    const result = await runSync({ includeTenants: parseIncludeTenants(url) });
+    return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unexpected sync error." },
@@ -462,6 +503,20 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json({ message: "Use POST to trigger sync." }, { status: 405 });
+/** Vercel Cron invokes GET. Same sync as POST. Use ?scope=work_orders for hourly WO-only. */
+export async function GET(request: Request) {
+  const denied = authorize(request);
+  if (denied) return denied;
+
+  try {
+    const url = new URL(request.url);
+    // Daily cron = full sync (WOs + tenants). Hourly external cron should use ?scope=work_orders.
+    const result = await runSync({ includeTenants: parseIncludeTenants(url) });
+    return NextResponse.json(result);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unexpected sync error." },
+      { status: 500 },
+    );
+  }
 }
