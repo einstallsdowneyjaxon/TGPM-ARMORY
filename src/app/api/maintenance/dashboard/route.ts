@@ -3,9 +3,36 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
+/** Calendar date in America/New_York (TGPM / AppFolio local day). */
+function etToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+type TodayWoRow = {
+  work_order_number: string;
+  unit_address: string | null;
+  job_description: string | null;
+  service_request_description: string | null;
+  job_category: string | null;
+  billed_amount: number | null;
+  status: string | null;
+  created_at_af: string | null;
+  requesting_resident: string | null;
+  occupancy_id: string | null;
+  is_turn: boolean | null;
+  is_capital: boolean | null;
+  history_count: number;
+};
+
 export async function GET() {
   try {
     const supabase = getSupabaseClient();
+    const today = etToday();
 
     // Get active tenant names for filtering
     const { data: activeTenantRows } = await supabase
@@ -28,6 +55,7 @@ export async function GET() {
       { data: categoryTotals },
       { data: pmBreakdown },
       { data: recentActivity },
+      { data: todayRows },
     ] = await Promise.all([
       // Tenants — filtered to active if tenant directory has been synced
       supabase
@@ -71,6 +99,14 @@ export async function GET() {
         .gte("created_at_af", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
         .order("created_at_af", { ascending: false })
         .limit(200),
+
+      // Today's work orders (America/New_York calendar day)
+      supabase
+        .from("work_orders")
+        .select("work_order_number, unit_address, job_description, service_request_description, job_category, billed_amount, status, created_at_af, requesting_resident, occupancy_id, is_turn, is_capital")
+        .eq("created_at_af", today)
+        .order("created_at_af", { ascending: false })
+        .limit(200),
     ]);
 
     // Portfolio totals
@@ -111,6 +147,36 @@ export async function GET() {
         })
       : (tenantWatchlist ?? []);
 
+    // History counts for today's cards (prior WOs for same occupancy)
+    const todayList = (todayRows ?? []) as Omit<TodayWoRow, "history_count">[];
+    const occIds = [...new Set(todayList.map((r) => r.occupancy_id).filter(Boolean))] as string[];
+    const historyByOcc = new Map<string, number>();
+
+    if (occIds.length > 0) {
+      await Promise.all(
+        occIds.map(async (occId) => {
+          const { count } = await supabase
+            .from("work_orders")
+            .select("work_order_number", { count: "exact", head: true })
+            .eq("occupancy_id", occId);
+          // Subtract today's WOs for this occupancy so badge = prior history
+          const todayForOcc = todayList.filter((r) => r.occupancy_id === occId).length;
+          historyByOcc.set(occId, Math.max(0, (count ?? 0) - todayForOcc));
+        }),
+      );
+    }
+
+    const todayWorkOrders: TodayWoRow[] = todayList.map((r) => ({
+      ...r,
+      history_count: r.occupancy_id ? (historyByOcc.get(r.occupancy_id) ?? 0) : 0,
+    }));
+
+    const { data: syncState } = await supabase
+      .from("maintenance_sync_state")
+      .select("last_synced_at, last_synced_count, last_sync_scope")
+      .eq("id", "default")
+      .maybeSingle();
+
     return NextResponse.json({
       portfolioTotals,
       tenantWatchlist: filteredTenants,
@@ -119,7 +185,12 @@ export async function GET() {
       categoryTotals: categories,
       pmBreakdown: pmMap,
       recentActivity: recentActivity ?? [],
+      todayWorkOrders,
+      todayDate: today,
       activeTenantsLoaded: hasActiveTenants,
+      lastSyncedAt: (syncState?.last_synced_at as string | null) ?? null,
+      lastSyncedCount: syncState?.last_synced_count ?? null,
+      lastSyncScope: syncState?.last_sync_scope ?? null,
     });
   } catch (err) {
     return NextResponse.json(
