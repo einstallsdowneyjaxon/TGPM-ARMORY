@@ -152,6 +152,13 @@ export const tools: ToolLink[] = [
     url: "/move-out-inspector",
   },
   {
+    name: "zInspector Photo Viewer",
+    description:
+      "Search a property address to browse zInspector inspection photos in one place.",
+    category: "Operations",
+    url: "https://widgets.zinspector.com/tools/z-photo-viewer",
+  },
+  {
     name: "Maintenance Intelligence",
     description:
       "Tenant maintenance watchlist, property burden analysis, recurring issues, and PM group breakdown — powered by live AppFolio work orders.",
