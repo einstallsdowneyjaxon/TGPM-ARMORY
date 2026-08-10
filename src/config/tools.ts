@@ -91,6 +91,13 @@ export const tools: ToolLink[] = [
     url: "https://script.google.com/a/macros/thetgpm.com/s/AKfycbxpJRtlwgSNLUeXnMJSTSIJnDye0yQSuIT5Zu3vMkRXYpZsYeBAortgu3OFZNMB3iuy/exec",
   },
   {
+    name: "Zillow Intelligence",
+    description:
+      "Upload Zillow listing performance and renter demand reports to enrich market analytics.",
+    category: "Leasing",
+    url: "https://portfolio-gl-analyzer.vercel.app/zillow-intelligence",
+  },
+  {
     name: "Repair vs Replace",
     description:
       "Evaluate repair cost, asset life, and determine whether replacement is best.",
