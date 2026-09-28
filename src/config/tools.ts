@@ -40,51 +40,6 @@ const propertyOnboardingBot = getMissionControlBot("property-onboarding-bot");
 
 export const tools: ToolLink[] = [
   {
-    name: "Coco XR Mission Control",
-    description: "Monitor and open the live Coco XR bot operations dashboard.",
-    category: "Operations",
-    url: "http://206.81.13.133:8790/",
-    missionControlSummary: {
-      botIds: ["renewal-bot", "property-onboarding-bot", "mls-bot"],
-    },
-  },
-  {
-    name: "Renewal Bot",
-    description:
-      "Review upcoming renewals, risk signals, and automation status.",
-    category: "Operations",
-    url: "https://script.google.com/macros/s/AKfycbxF1dletvJqqGAgnVSSpkqIsu22QSx9izB96qbAUlzrqHFWT0e2oHgbQOaWt9lbSmnrIQ/exec",
-    bot: {
-      id: "renewal-bot",
-      label: renewalBot?.name || "Renewal Bot",
-      status: renewalBot?.status || "Unknown",
-    },
-  },
-  {
-    name: "Property Onboarding Bot",
-    description:
-      "Complete onboarding setup, intake, and automation handoff readiness for new management properties.",
-    category: "Operations",
-    url: "https://appfolio-property-onboarding.vercel.app/",
-    bot: {
-      id: "property-onboarding-bot",
-      label: propertyOnboardingBot?.name || "Property Onboarding Bot",
-      status: propertyOnboardingBot?.status || "Unknown",
-    },
-  },
-  {
-    name: "MLS Bot",
-    description:
-      "Complete missing PM fields for MLS_READY rows before the MLS automation runs.",
-    category: "Operations",
-    url: "/mls-ready",
-    bot: {
-      id: "mls-bot",
-      label: mlsBot?.name || "MLS Bot",
-      status: mlsBot?.status || "Unknown",
-    },
-  },
-  {
     name: "Get Rent Comps",
     description: "Compare nearby rent signals and market positioning.",
     category: "Leasing",
@@ -164,6 +119,51 @@ export const tools: ToolLink[] = [
       "Search a property address to browse zInspector inspection photos in one place.",
     category: "Operations",
     url: "https://widgets.zinspector.com/tools/z-photo-viewer",
+  },
+  {
+    name: "Coco XR Mission Control",
+    description: "Monitor and open the live Coco XR bot operations dashboard.",
+    category: "Operations",
+    url: "http://206.81.13.133:8790/",
+    missionControlSummary: {
+      botIds: ["renewal-bot", "property-onboarding-bot", "mls-bot"],
+    },
+  },
+  {
+    name: "Renewal Bot",
+    description:
+      "Review upcoming renewals, risk signals, and automation status.",
+    category: "Operations",
+    url: "https://script.google.com/macros/s/AKfycbxF1dletvJqqGAgnVSSpkqIsu22QSx9izB96qbAUlzrqHFWT0e2oHgbQOaWt9lbSmnrIQ/exec",
+    bot: {
+      id: "renewal-bot",
+      label: renewalBot?.name || "Renewal Bot",
+      status: renewalBot?.status || "Unknown",
+    },
+  },
+  {
+    name: "Property Onboarding Bot",
+    description:
+      "Complete onboarding setup, intake, and automation handoff readiness for new management properties.",
+    category: "Operations",
+    url: "https://appfolio-property-onboarding.vercel.app/",
+    bot: {
+      id: "property-onboarding-bot",
+      label: propertyOnboardingBot?.name || "Property Onboarding Bot",
+      status: propertyOnboardingBot?.status || "Unknown",
+    },
+  },
+  {
+    name: "MLS Bot",
+    description:
+      "Complete missing PM fields for MLS_READY rows before the MLS automation runs.",
+    category: "Operations",
+    url: "/mls-ready",
+    bot: {
+      id: "mls-bot",
+      label: mlsBot?.name || "MLS Bot",
+      status: mlsBot?.status || "Unknown",
+    },
   },
   {
     name: "Maintenance Intelligence",
