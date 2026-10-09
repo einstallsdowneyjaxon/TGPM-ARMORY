@@ -20,3 +20,8 @@ Non-obvious notes:
 - Account is on **Vercel Hobby**, which only allows one cron fire per day — keep the overnight job in `vercel.json`. For business-hours hourly pulls, use an external scheduler against `?scope=work_orders` (Hobby cannot host hourly Vercel Cron).
 - "Today's Work Orders" uses America/New_York calendar date vs `work_orders.created_at_af`. Expand loads `/api/maintenance/history` by `occupancy_id` (index `idx_work_orders_occupancy_id`).
 - Open dashboard tabs auto-refresh after a completed sync: sync stamps `maintenance_sync_state.last_synced_at`; the page polls `/api/maintenance/sync-status` ~every 60s and reloads when the stamp changes (does not call AppFolio).
+
+### Legal Summons Intake (`/legal-intake`)
+- Upload summons/complaint + supporting files; server OCR/analysis stores rows in Supabase `legal_*` tables and files in private bucket `legal-intake-docs`.
+- Requires `OPENAI_API_KEY`, `RESEND_API_KEY`, `LEGAL_ALERT_EMAILS` (or `LEGAL_ALERT_EMAIL_1..3`), and Supabase env vars. Optional `public_docket_url` per matter enables hash-based docket change checks.
+- Reminders/docket cron: `GET /api/legal-intake/cron` (Bearer `CRON_SECRET` if set). Within 7 days of a court date, reminder emails go every ~48h; otherwise ~weekly for dates within 30 days.
