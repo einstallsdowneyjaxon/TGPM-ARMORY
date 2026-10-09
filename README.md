@@ -42,6 +42,25 @@ OPENAI_MODEL=gpt-4.1-mini
 
 The Property Health Analyzer still parses CSV files and calculates dashboard totals without an API key. The API key is only required when you click **Generate AI analysis**.
 
+### Legal Summons Intake (`/legal-intake`)
+
+Requires Supabase, OpenAI, Resend, and alert recipients:
+
+```bash
+SUPABASE_URL=...
+SUPABASE_SERVICE_KEY=...
+OPENAI_API_KEY=...
+RESEND_API_KEY=...
+LEGAL_EMAIL_FROM="TGPM Legal Intake <alerts@yourdomain.com>"
+LEGAL_ALERT_EMAILS=person1@thetgpm.com,person2@thetgpm.com,person3@thetgpm.com
+NEXT_PUBLIC_APP_URL=https://your-armory-domain.vercel.app
+CRON_SECRET=optional_shared_secret
+```
+
+Apply `supabase/migrations/20261009190000_legal_intake_tables.sql` to your Supabase project (creates `legal_*` tables and private storage bucket `legal-intake-docs`).
+
+Schedule reminders and public docket checks by calling `GET /api/legal-intake/cron` daily (Bearer `CRON_SECRET` when set). On Vercel Hobby, use an external scheduler if you already consume the single Vercel Cron slot. Within 7 days of a court date, reminder emails are sent every other day automatically.
+
 ## Property Health Analyzer
 
 Open [http://localhost:3000/property-health-analyzer](http://localhost:3000/property-health-analyzer).

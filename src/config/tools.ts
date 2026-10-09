@@ -107,6 +107,13 @@ export const tools: ToolLink[] = [
     url: "/property-health-analyzer",
   },
   {
+    name: "Legal Summons Intake",
+    description:
+      "Upload summons and complaint documents, OCR deadlines, email alerts, build a mini docket, and get AI Florida research with proposed next steps (not legal advice).",
+    category: "Operations",
+    url: "/legal-intake",
+  },
+  {
     name: "Move-Out Inspector",
     description:
       "Upload move-in and move-out inspection PDFs to identify new damage, pre-existing conditions, and resolved items.",
